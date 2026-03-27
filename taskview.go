@@ -437,18 +437,19 @@ func wrapText(s string, width int) []string {
 }
 
 func truncate(s string, max int) string {
-	if len(s) <= max {
+	runes := []rune(s)
+	if len(runes) <= max {
 		return s
 	}
-	return s[:max-1] + "…"
+	return string(runes[:max-1]) + "…"
 }
 
 // runTaskViewer launches the interactive task TUI
 func runTaskViewer() {
 	listID := os.Getenv("CLAUDEBAR_TASK_LIST_ID")
 	if listID == "" {
-		fmt.Println("No task list ID set.")
-		select {}
+		fmt.Fprintln(os.Stderr, "No task list ID set.")
+		os.Exit(1)
 	}
 
 	m := newTaskModel(listID)

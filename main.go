@@ -52,8 +52,6 @@ func main() {
 		runSendToPane("/compact")
 	case "_clear":
 		runSendToPane("/clear")
-	case "_cost":
-		runSendToPane("/cost")
 	case "_verbose":
 		runSendToPane("/verbose")
 	case "_usage":
@@ -64,10 +62,6 @@ func main() {
 		if len(os.Args) > 2 {
 			runToggleFeature(os.Args[2])
 		}
-	case "_cleanup":
-		runCleanup()
-	case "_check-main":
-		runCheckMain()
 	case "_statusline":
 		runStatusLine()
 

@@ -252,49 +252,37 @@ func runPerms() {
 	restartClaudeWithResume(sess, state)
 }
 
-func runTasks() {
-	// Check if we have a tracked tasks pane that's still alive
-	paneID, _ := tmuxOutput("show-options", "-v", "@claudebar-tasks-pane")
+// togglePane checks if a tracked pane exists and kills it (toggle off),
+// or creates a new one with the given command (toggle on).
+func togglePane(optionName, cmd, direction, size string) {
+	paneID, _ := tmuxOutput("show-options", "-v", optionName)
 	if paneID != "" {
 		existing, _ := tmuxOutput("list-panes", "-F", "#{pane_id}")
 		if strings.Contains(existing, paneID) {
 			tmuxExec("kill-pane", "-t", paneID)
-			tmuxExec("set-option", "-u", "@claudebar-tasks-pane")
+			tmuxExec("set-option", "-u", optionName)
 			return
 		}
-		tmuxExec("set-option", "-u", "@claudebar-tasks-pane")
+		tmuxExec("set-option", "-u", optionName)
 	}
 
-	// Get the session name to derive the task list ID
-	sess, _ := tmuxOutput("display-message", "-p", "#{session_name}")
-	taskListID := taskListIDForSession(sess)
-	self := selfPath()
-
-	// Launch our built-in task viewer in a side pane
-	taskCmd := fmt.Sprintf("CLAUDEBAR_TASK_LIST_ID=%s %s _taskview",
-		shellQuote(taskListID), shellQuote(self))
-
-	newPaneID, err := tmuxOutput("split-window", "-h", "-l", "35%", "-P", "-F", "#{pane_id}", taskCmd)
+	newPaneID, err := tmuxOutput("split-window", direction, "-l", size, "-P", "-F", "#{pane_id}", cmd)
 	if err == nil && newPaneID != "" {
-		tmuxExec("set-option", "@claudebar-tasks-pane", newPaneID)
-
+		tmuxExec("set-option", optionName, newPaneID)
 		tmuxExec("select-pane", "-t", ":.0")
 	}
 }
 
-func runAgents() {
-	// Check if we have a tracked agents pane that's still alive
-	paneID, _ := tmuxOutput("show-options", "-v", "@claudebar-agents-pane")
-	if paneID != "" {
-		existing, _ := tmuxOutput("list-panes", "-F", "#{pane_id}")
-		if strings.Contains(existing, paneID) {
-			tmuxExec("kill-pane", "-t", paneID)
-			tmuxExec("set-option", "-u", "@claudebar-agents-pane")
-			return
-		}
-		tmuxExec("set-option", "-u", "@claudebar-agents-pane")
-	}
+func runTasks() {
+	sess, _ := tmuxOutput("display-message", "-p", "#{session_name}")
+	taskListID := taskListIDForSession(sess)
+	self := selfPath()
+	taskCmd := fmt.Sprintf("CLAUDEBAR_TASK_LIST_ID=%s %s _taskview",
+		shellQuote(taskListID), shellQuote(self))
+	togglePane("@claudebar-tasks-pane", taskCmd, "-h", "35%")
+}
 
+func runAgents() {
 	self := selfPath()
 	sess, _ := tmuxOutput("display-message", "-p", "#{session_name}")
 	state, _ := loadState(sess)
@@ -304,13 +292,7 @@ func runAgents() {
 	}
 	agentCmd := fmt.Sprintf("CLAUDEBAR_CWD=%s %s _agentview",
 		shellQuote(workDir), shellQuote(self))
-
-	newPaneID, err := tmuxOutput("split-window", "-h", "-l", "35%", "-P", "-F", "#{pane_id}", agentCmd)
-	if err == nil && newPaneID != "" {
-		tmuxExec("set-option", "@claudebar-agents-pane", newPaneID)
-
-		tmuxExec("select-pane", "-t", ":.0")
-	}
+	togglePane("@claudebar-agents-pane", agentCmd, "-h", "35%")
 }
 
 func runFeatures() {
@@ -364,30 +346,11 @@ func runToggleFeature(envVar string) {
 }
 
 func runShell() {
-	// Check if we have a tracked shell pane that's still alive
-	paneID, _ := tmuxOutput("show-options", "-v", "@claudebar-shell-pane")
-	if paneID != "" {
-		existing, _ := tmuxOutput("list-panes", "-F", "#{pane_id}")
-		if strings.Contains(existing, paneID) {
-			tmuxExec("kill-pane", "-t", paneID)
-			tmuxExec("set-option", "-u", "@claudebar-shell-pane")
-			return
-		}
-		tmuxExec("set-option", "-u", "@claudebar-shell-pane")
-	}
-
 	shell := os.Getenv("SHELL")
 	if shell == "" {
 		shell = "/bin/zsh"
 	}
-
-	newPaneID, err := tmuxOutput("split-window", "-v", "-l", "30%", "-P", "-F", "#{pane_id}",
-		fmt.Sprintf("%s -l", shell))
-	if err == nil && newPaneID != "" {
-		tmuxExec("set-option", "@claudebar-shell-pane", newPaneID)
-
-		tmuxExec("select-pane", "-t", ":.0")
-	}
+	togglePane("@claudebar-shell-pane", fmt.Sprintf("%s -l", shell), "-v", "30%")
 }
 
 // runMenu: show the full action menu as a tmux display-menu (for ⌥M keyboard shortcut)
@@ -418,49 +381,15 @@ func runMenu() {
 	)
 }
 
-// runSendToPane: type a command into the claude pane and press enter
+// runSendToPane types a command into the claude pane and presses enter
 func runSendToPane(cmd string) {
-	// Send to pane 0 (the claude pane)
-	tmuxExec("send-keys", "-t", ":.0", cmd, "Enter")
+	tmuxExec("send-keys", "-t", ":.0", "-l", cmd)
+	tmuxExec("send-keys", "-t", ":.0", "Enter")
 }
 
-// runKillSession: actually kill the tmux session (quit claude)
 func runKillSession() {
 	sess, _ := tmuxOutput("display-message", "-p", "#{session_name}")
 	tmuxExec("kill-session", "-t", sess)
-}
-
-// runCleanup kills the current tmux session after claude exits naturally.
-// Only reached on natural exit — respawn-pane -k sends SIGKILL which kills
-// the whole process chain before this runs.
-func runCleanup() {
-	sess, _ := tmuxOutput("display-message", "-p", "#{session_name}")
-	if sess != "" {
-		tmuxExec("kill-session", "-t", sess)
-	}
-}
-
-// runCheckMain checks if the main claude pane still exists. If not, kills the session.
-// Called by the pane-exited hook — instant, no polling.
-func runCheckMain() {
-	mainID, err := tmuxOutput("show-option", "-v", "@claudebar-main")
-	if err != nil || mainID == "" {
-		return
-	}
-	panes, err := tmuxOutput("list-panes", "-F", "#{pane_id}")
-	if err != nil {
-		return
-	}
-	for _, line := range strings.Split(panes, "\n") {
-		if strings.TrimSpace(line) == mainID {
-			return // main pane still alive
-		}
-	}
-	// Main pane is gone — kill session
-	sess, _ := tmuxOutput("display-message", "-p", "#{session_name}")
-	if sess != "" {
-		tmuxExec("kill-session", "-t", sess)
-	}
 }
 
 func runHelpPopup() {

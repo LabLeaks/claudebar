@@ -51,8 +51,14 @@ func peakInfo() (isPeak bool, localStart, localEnd string) {
 
 	weekday := nowPT.Weekday()
 	if weekday == time.Saturday || weekday == time.Sunday {
-		startPT := time.Date(nowPT.Year(), nowPT.Month(), nowPT.Day(), 5, 0, 0, 0, pt)
-		endPT := time.Date(nowPT.Year(), nowPT.Month(), nowPT.Day(), 11, 0, 0, 0, pt)
+		// Show next Monday's peak window
+		daysUntilMonday := (8 - int(weekday)) % 7
+		if daysUntilMonday == 0 {
+			daysUntilMonday = 1
+		}
+		monday := nowPT.AddDate(0, 0, daysUntilMonday)
+		startPT := time.Date(monday.Year(), monday.Month(), monday.Day(), 5, 0, 0, 0, pt)
+		endPT := time.Date(monday.Year(), monday.Month(), monday.Day(), 11, 0, 0, 0, pt)
 		return false, startPT.In(now.Location()).Format("3:04pm MST"), endPT.In(now.Location()).Format("3:04pm MST")
 	}
 

@@ -154,7 +154,6 @@ bind -n M-h run-shell "SELF _help"
 bind -n M-m run-shell "SELF _menu"
 
 # Click anywhere on status bar → inline menu (not run-shell, so drag works)
-MENU_DEF
 bind -n MouseDown1Status MENU_CMD
 bind -n MouseDown1StatusRight MENU_CMD
 bind -n MouseDown1StatusLeft MENU_CMD
@@ -172,8 +171,6 @@ set -sg escape-time 10
 `
 	conf = strings.ReplaceAll(conf, "SELF", s)
 	conf = strings.ReplaceAll(conf, "MENU_CMD", menu)
-	conf = strings.ReplaceAll(conf, "MENU_DEF\n", "")
-	conf = strings.ReplaceAll(conf, "SOCK", tmuxSocket)
 	return conf
 }
 

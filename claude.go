@@ -171,18 +171,7 @@ func toggleBypassPermissions(current string) string {
 	return "bypassPermissions"
 }
 
-func permissionModeLabel(mode string) string {
-	switch mode {
-	case "bypassPermissions":
-		return "skip-perms"
-	case "plan":
-		return "plan"
-	default:
-		return "default"
-	}
-}
-
-// captureClaudeSessionID tries to extract the session ID from claude's output
+// findLatestClaudeSession tries to extract the session ID from claude's output
 // by reading the session file that claude writes
 func findLatestClaudeSession(workDir string) string {
 	home, err := os.UserHomeDir()

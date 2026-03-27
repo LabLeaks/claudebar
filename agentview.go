@@ -155,7 +155,7 @@ func findSubagentTranscripts() []subagentInfo {
 		return nil
 	}
 
-	encoded := strings.ReplaceAll(strings.TrimPrefix(cwd, "/"), "/", "-")
+	encoded := strings.ReplaceAll(cwd, "/", "-")
 	searchDir := filepath.Join(projectsDir, encoded)
 	if _, err := os.Stat(searchDir); err != nil {
 		return nil
@@ -204,14 +204,29 @@ func findSubagentTranscripts() []subagentInfo {
 }
 
 func readLastLine(path string) string {
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return ""
 	}
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	if len(lines) == 0 {
+	defer f.Close()
+
+	// Read last 4KB instead of entire file
+	const tailSize = 4096
+	info, err := f.Stat()
+	if err != nil {
 		return ""
 	}
+	offset := info.Size() - tailSize
+	if offset < 0 {
+		offset = 0
+	}
+	f.Seek(offset, 0)
+	buf := make([]byte, tailSize)
+	n, _ := f.Read(buf)
+	if n == 0 {
+		return ""
+	}
+	lines := strings.Split(strings.TrimSpace(string(buf[:n])), "\n")
 	last := lines[len(lines)-1]
 
 	var entry map[string]interface{}
