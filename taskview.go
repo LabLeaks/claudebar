@@ -152,6 +152,19 @@ func (m taskModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case tea.MouseWheelMsg:
+		mouse := msg.Mouse()
+		if mouse.Button == tea.MouseWheelUp {
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		} else if mouse.Button == tea.MouseWheelDown {
+			if m.cursor < len(m.tasks)-1 {
+				m.cursor++
+			}
+		}
+		return m, nil
+
 	case tea.KeyPressMsg:
 		switch m.mode {
 		case taskListView:
@@ -290,6 +303,7 @@ func (m taskModel) View() tea.View {
 		v = tea.NewView(m.viewList())
 	}
 	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
 	return v
 }
 

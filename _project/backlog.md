@@ -10,8 +10,8 @@ Unclassified items. Promote to a sprint when ready to work on them.
 
 ## Features
 
+- [ ] Agent session switching — select an agent in the side panel to swap the main pane to that agent's live session (respawn-pane with --resume). Auto-return to lead when agent terminates. This is the key UX for managing agent teams.
 - [ ] Show plan name in status bar (blocked — not available from statusline API yet, monitor for changes)
-- [ ] Scrollable inbox view in agents panel (currently shows all messages, overflows on long histories)
 - [ ] Search/filter in task viewer
 - [ ] Show active feature toggles in status bar (e.g. "TEAMS" indicator)
 

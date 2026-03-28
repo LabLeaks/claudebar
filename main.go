@@ -5,6 +5,13 @@ import (
 	"os"
 )
 
+// Set by goreleaser ldflags
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func main() {
 	if len(os.Args) < 2 {
 		runDefault()
@@ -16,7 +23,7 @@ func main() {
 	case "help", "--help", "-h":
 		runHelp()
 	case "version", "--version", "-v":
-		fmt.Println("claudebar v0.1.0")
+		fmt.Printf("claudebar %s (%s, %s)\n", version, commit, date)
 	case "sessions", "s":
 		runSessions()
 

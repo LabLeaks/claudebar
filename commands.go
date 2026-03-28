@@ -318,7 +318,6 @@ func togglePane(optionName, cmd, direction, size string) {
 	newPaneID, err := tmuxOutput("split-window", direction, "-l", size, "-P", "-F", "#{pane_id}", cmd)
 	if err == nil && newPaneID != "" {
 		tmuxExec("set-option", optionName, newPaneID)
-		tmuxExec("select-pane", "-t", ":.0")
 	}
 }
 

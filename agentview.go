@@ -291,6 +291,8 @@ type agentModel struct {
 	mode           agentViewMode
 	items          []agentItem
 	cursor         int
+	scroll         int // scroll offset for detail views
+	showPrompt     bool
 	projectDir     string
 	teams          []string
 	subagents      []subagentInfo
@@ -400,6 +402,35 @@ func (m agentModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case tea.MouseWheelMsg:
+		mouse := msg.Mouse()
+		switch m.mode {
+		case agentOverview:
+			if mouse.Button == tea.MouseWheelUp {
+				m.cursor--
+				if m.cursor < 0 {
+					m.cursor = len(m.items) - 1
+				}
+				m.skipHeaders(-1)
+			} else if mouse.Button == tea.MouseWheelDown {
+				m.cursor++
+				if m.cursor >= len(m.items) {
+					m.cursor = 0
+				}
+				m.skipHeaders(1)
+			}
+		default:
+			// Detail views: scroll content
+			if mouse.Button == tea.MouseWheelUp {
+				if m.scroll > 0 {
+					m.scroll--
+				}
+			} else if mouse.Button == tea.MouseWheelDown {
+				m.scroll++
+			}
+		}
+		return m, nil
+
 	case tea.KeyPressMsg:
 		switch m.mode {
 		case agentOverview:
@@ -455,10 +486,21 @@ func (m agentModel) updateMemberDetail(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		return m, tea.Quit
 	case "esc", "backspace":
 		m.mode = agentOverview
+		m.scroll = 0
+		m.showPrompt = false
+	case "up", "k":
+		if m.scroll > 0 {
+			m.scroll--
+		}
+	case "down", "j":
+		m.scroll++
+	case "p":
+		m.showPrompt = !m.showPrompt
 	case "i":
 		// View inbox
 		if m.selectedMember != nil {
 			m.inbox = loadInbox(m.selectedTeam, m.selectedMember.Name)
+			m.scroll = 0
 			m.mode = agentInboxDetail
 		}
 	case "e":
@@ -487,6 +529,13 @@ func (m agentModel) updateInboxDetail(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		return m, tea.Quit
 	case "esc", "backspace":
 		m.mode = agentMemberDetail
+		m.scroll = 0
+	case "up", "k":
+		if m.scroll > 0 {
+			m.scroll--
+		}
+	case "down", "j":
+		m.scroll++
 	case "e":
 		// Edit inbox file
 		if m.selectedMember != nil {
@@ -525,19 +574,74 @@ var (
 	agentValueStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#e0e0e0"))
 )
 
+func (m agentModel) applyScroll(content string) string {
+	if m.scroll == 0 || m.height == 0 {
+		return content
+	}
+	lines := strings.Split(content, "\n")
+	if m.scroll >= len(lines) {
+		return content
+	}
+	// Keep last line (hint bar) pinned at bottom
+	if len(lines) < 2 {
+		return content
+	}
+	body := lines[:len(lines)-1]
+	hint := lines[len(lines)-1]
+	if m.scroll >= len(body) {
+		return content
+	}
+	visible := append(body[m.scroll:], hint)
+	return strings.Join(visible, "\n")
+}
+
+func (m agentModel) applyOverviewScroll(content string) string {
+	if m.height == 0 {
+		return content
+	}
+	lines := strings.Split(content, "\n")
+	if len(lines) <= m.height {
+		return content
+	}
+	// Find which line the cursor is on by counting lines with ▸
+	cursorLine := 0
+	for i, line := range lines {
+		if strings.Contains(line, "▸") {
+			cursorLine = i
+			break
+		}
+	}
+	// Keep cursor in the middle third of the viewport
+	start := cursorLine - m.height/3
+	if start < 0 {
+		start = 0
+	}
+	end := start + m.height
+	if end > len(lines) {
+		end = len(lines)
+		start = end - m.height
+		if start < 0 {
+			start = 0
+		}
+	}
+	return strings.Join(lines[start:end], "\n")
+}
+
 func (m agentModel) View() tea.View {
-	var v tea.View
+	var content string
 	switch m.mode {
 	case agentMemberDetail:
-		v = tea.NewView(m.viewMemberDetail())
+		content = m.applyScroll(m.viewMemberDetail())
 	case agentInboxDetail:
-		v = tea.NewView(m.viewInbox())
+		content = m.applyScroll(m.viewInbox())
 	case agentSubagentDetail:
-		v = tea.NewView(m.viewSubagentDetail())
+		content = m.applyScroll(m.viewSubagentDetail())
 	default:
-		v = tea.NewView(m.viewOverview())
+		content = m.applyOverviewScroll(m.viewOverview())
 	}
+	v := tea.NewView(content)
 	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
 	return v
 }
 
@@ -640,13 +744,22 @@ func (m agentModel) viewMemberDetail() string {
 	}
 
 	if mem.Prompt != "" {
-		b.WriteString("\n" + agentLabelStyle.Render("  Prompt:") + "\n")
-		width := 50
-		if m.width > 10 {
-			width = m.width - 6
-		}
-		for _, line := range wrapText(mem.Prompt, width) {
-			b.WriteString(agentValueStyle.Render("    "+line) + "\n")
+		if m.showPrompt {
+			b.WriteString("\n" + agentLabelStyle.Render("  Prompt: (p to hide)") + "\n")
+			width := 50
+			if m.width > 10 {
+				width = m.width - 6
+			}
+			for _, line := range wrapText(mem.Prompt, width) {
+				b.WriteString(agentValueStyle.Render("    "+line) + "\n")
+			}
+		} else {
+			promptPreview := mem.Prompt
+			if len(promptPreview) > 40 {
+				promptPreview = promptPreview[:40] + "..."
+			}
+			b.WriteString(agentLabelStyle.Render("\n  Prompt: ") + agentDimStyle.Render(promptPreview) + "\n")
+			b.WriteString(agentDimStyle.Render("          (p to expand)") + "\n")
 		}
 	}
 
@@ -668,9 +781,9 @@ func (m agentModel) viewMemberDetail() string {
 	b.WriteString("\n")
 
 	b.WriteString("\n")
-	hint := "  esc back  i inbox  e edit  o open pane  d close"
+	hint := "  esc back  ↑↓ scroll  p prompt  i inbox  o open  d close"
 	if mem.AgentType == "lead" {
-		hint = "  esc back  i inbox  e edit  d close"
+		hint = "  esc back  ↑↓ scroll  p prompt  i inbox  d close"
 	}
 	b.WriteString(agentHintStyle.Render(hint) + "\n")
 	return b.String()
