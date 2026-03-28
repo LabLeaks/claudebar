@@ -1,6 +1,6 @@
 #!/bin/sh
 # claudebar installer
-# Usage: curl -sSfL https://raw.githubusercontent.com/lableaks/claudebar/main/install.sh | sh
+# Usage: curl -sSfL https://raw.githubusercontent.com/lableaks/claudebar/master/install.sh | sh
 
 set -e
 

@@ -22,7 +22,7 @@ claudebar wraps Claude Code in a tmux session with a status bar, interactive sid
 brew install lableaks/tap/claudebar
 
 # Or download the binary
-curl -sSfL https://raw.githubusercontent.com/lableaks/claudebar/main/install.sh | sh
+curl -sSfL https://raw.githubusercontent.com/lableaks/claudebar/master/install.sh | sh
 
 # Or build from source (Go 1.26+)
 git clone https://github.com/lableaks/claudebar && cd claudebar && make install
