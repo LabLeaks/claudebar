@@ -40,13 +40,22 @@ type cachedUsage struct {
 	UpdatedAt    int64   `json:"updated_at"`
 }
 
-func usageCacheFile() string {
-	return filepath.Join(stateDir(), "usage-cache.json")
+func usageCacheFile(sessionName string) string {
+	if sessionName == "" {
+		sessionName = "default"
+	}
+	return filepath.Join(stateDir(), sessionName+".usage-cache.json")
 }
 
 // runStatusLine reads Claude's statusline JSON from stdin, caches usage data,
 // and outputs the existing statusline format (so we don't break the user's display)
 func runStatusLine() {
+	// Session name is passed as an argument by writeStatuslineSettings
+	sessionName := "default"
+	if len(os.Args) > 2 {
+		sessionName = os.Args[2]
+	}
+
 	data, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		return
@@ -76,7 +85,7 @@ func runStatusLine() {
 	}
 
 	cacheData, _ := json.Marshal(cache)
-	os.WriteFile(usageCacheFile(), cacheData, 0644)
+	os.WriteFile(usageCacheFile(sessionName), cacheData, 0644)
 
 	// Output statusline for Claude's built-in display (preserve existing behavior)
 	user := os.Getenv("USER")
@@ -93,10 +102,10 @@ func runStatusLine() {
 }
 
 // writeStatuslineSettings writes a settings file that configures claudebar as the statusline handler
-func writeStatuslineSettings(selfPath string) string {
+func writeStatuslineSettings(selfPath, tmuxSession string) string {
 	dir := stateDir()
-	path := filepath.Join(dir, "statusline-settings.json")
-	content := fmt.Sprintf(`{"statusLine":{"type":"command","command":"%s _statusline"}}`, selfPath)
+	path := filepath.Join(dir, tmuxSession+".statusline-settings.json")
+	content := fmt.Sprintf(`{"statusLine":{"type":"command","command":"%s _statusline %s"}}`, selfPath, tmuxSession)
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		return ""
 	}
@@ -104,8 +113,8 @@ func writeStatuslineSettings(selfPath string) string {
 }
 
 // loadCachedUsage reads the cached usage data from the temp file
-func loadCachedUsage() *cachedUsage {
-	data, err := os.ReadFile(usageCacheFile())
+func loadCachedUsage(sessionName string) *cachedUsage {
+	data, err := os.ReadFile(usageCacheFile(sessionName))
 	if err != nil {
 		return nil
 	}

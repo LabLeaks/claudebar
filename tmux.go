@@ -13,6 +13,36 @@ const (
 	tmuxSocket    = "claudebar"
 )
 
+// menuItem represents one entry in the claudebar menu.
+// A zero-value item (Label == "") renders as a separator.
+type menuItem struct {
+	Label   string // display text
+	Key     string // tmux shortcut key
+	Action  string // claudebar subcommand, e.g. "_detach"
+	Confirm string // if set, wrap action with tmux confirm-before using this prompt
+}
+
+// menuItems is the single source of truth for the claudebar menu.
+var menuItems = []menuItem{
+	{"⏏ Background                 ⌥W", "b", "_detach", ""},
+	{"✕ Kill session                  ", "x", "_kill", "Kill this session? (y/n)"},
+	{},
+	{"⟳ Toggle bypass permissions     ", "p", "_perms", ""},
+	{"↑ Update Claude Code            ", "u", "_upgrade", ""},
+	{"⚙ Features (env toggles)        ", "f", "_features", ""},
+	{},
+	{"$ Toggle shell pane          ⌥S", "s", "_shell", ""},
+	{"☰ Toggle tasks pane          ⌥T", "t", "_tasks", ""},
+	{"🤖 Toggle agents pane         ⌥A", "a", "_agents", ""},
+	{},
+	{"🗜 Compact context               ", "k", "_compact", ""},
+	{"🔄 Clear / new chat              ", "n", "_clear", ""},
+	{"📝 Toggle verbose                ", "v", "_verbose", ""},
+	{"📊 Show usage                    ", "c", "_usage", ""},
+	{},
+	{"? Help                       ⌥H", "h", "_help", ""},
+}
+
 func tmuxExec(args ...string) error {
 	fullArgs := append([]string{"-L", tmuxSocket}, args...)
 	cmd := exec.Command("tmux", fullArgs...)
@@ -88,26 +118,24 @@ func sessionExists(name string) bool {
 }
 
 func menuCmd(self string) string {
-	s := self
 	// Inline display-menu so click-and-drag highlighting works
-	return `display-menu -T " #[fg=#00d4ff,bold]claudebar " -x R -y S ` +
-		`"⏏ Background                 ⌥W" b "run-shell '` + s + ` _detach'" ` +
-		`"✕ Kill session                  " x "run-shell '` + s + ` _kill'" ` +
-		`"" ` +
-		`"⟳ Toggle bypass permissions     " p "run-shell '` + s + ` _perms'" ` +
-		`"↑ Update Claude Code            " u "run-shell '` + s + ` _upgrade'" ` +
-		`"⚙ Features (env toggles)        " f "run-shell '` + s + ` _features'" ` +
-		`"" ` +
-		`"$ Toggle shell pane          ⌥S" s "run-shell '` + s + ` _shell'" ` +
-		`"☰ Toggle tasks pane          ⌥T" t "run-shell '` + s + ` _tasks'" ` +
-		`"🤖 Toggle agents pane         ⌥A" a "run-shell '` + s + ` _agents'" ` +
-		`"" ` +
-		`"🗜 Compact context               " k "run-shell '` + s + ` _compact'" ` +
-		`"🔄 Clear / new chat              " n "run-shell '` + s + ` _clear'" ` +
-		`"📝 Toggle verbose                " v "run-shell '` + s + ` _verbose'" ` +
-		`"📊 Show usage                    " c "run-shell '` + s + ` _usage'" ` +
-		`"" ` +
-		`"? Help                       ⌥H" h "run-shell '` + s + ` _help'"`
+	var b strings.Builder
+	b.WriteString(`display-menu -T " #[fg=#00d4ff,bold]claudebar " -x R -y S `)
+	for _, m := range menuItems {
+		if m.Label == "" {
+			b.WriteString(`"" `)
+			continue
+		}
+		runShell := `run-shell '` + self + ` ` + m.Action + `'`
+		if m.Confirm != "" {
+			// confirm-before needs the run-shell command in double quotes inside,
+			// and the whole thing must NOT be re-wrapped in double quotes
+			b.WriteString(`"` + m.Label + `" ` + m.Key + ` "confirm-before -p '` + m.Confirm + `' \"` + runShell + `\"" `)
+		} else {
+			b.WriteString(`"` + m.Label + `" ` + m.Key + ` "` + runShell + `" `)
+		}
+	}
+	return strings.TrimRight(b.String(), " ")
 }
 
 func generateTmuxConf() string {

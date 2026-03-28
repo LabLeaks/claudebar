@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
+	"time"
 )
 
 // TestStatusLineDataParsing verifies that Claude's statusline JSON is
@@ -112,5 +114,70 @@ func TestCacheRoundTrip(t *testing.T) {
 	}
 	if restored.Model != "Opus 4.6" {
 		t.Errorf("Model = %q, want %q", restored.Model, "Opus 4.6")
+	}
+}
+
+func TestUsageCacheFileIncludesSessionName(t *testing.T) {
+	path := usageCacheFile("my-project")
+	if !strings.HasSuffix(path, "my-project.usage-cache.json") {
+		t.Errorf("usageCacheFile(%q) = %q, should end with my-project.usage-cache.json", "my-project", path)
+	}
+}
+
+func TestUsageCacheFileEmptySessionDefaults(t *testing.T) {
+	path := usageCacheFile("")
+	if !strings.Contains(path, "default.usage-cache.json") {
+		t.Errorf("usageCacheFile(%q) = %q, should contain 'default'", "", path)
+	}
+}
+
+func TestUsageCacheFileDifferentSessions(t *testing.T) {
+	path1 := usageCacheFile("project-a")
+	path2 := usageCacheFile("project-b")
+	if path1 == path2 {
+		t.Errorf("different sessions should produce different paths: %q == %q", path1, path2)
+	}
+}
+
+func TestLoadCachedUsageWithSessionName(t *testing.T) {
+	sessionName := "test-session-load"
+	cache := cachedUsage{
+		FiveHourPct: 55.5,
+		Model:       "Opus 4.6",
+		UpdatedAt:   time.Now().Unix(),
+	}
+	data, _ := json.Marshal(cache)
+	path := usageCacheFile(sessionName)
+	os.WriteFile(path, data, 0644)
+	defer os.Remove(path)
+
+	loaded := loadCachedUsage(sessionName)
+	if loaded == nil {
+		t.Fatal("loadCachedUsage returned nil")
+	}
+	if loaded.FiveHourPct != 55.5 {
+		t.Errorf("FiveHourPct = %f, want 55.5", loaded.FiveHourPct)
+	}
+
+	other := loadCachedUsage("other-session")
+	if other != nil {
+		t.Error("loadCachedUsage for different session should return nil")
+	}
+}
+
+func TestWriteStatuslineSettingsIncludesSession(t *testing.T) {
+	path := writeStatuslineSettings("/usr/local/bin/claudebar", "my-project")
+	if path == "" {
+		t.Fatal("writeStatuslineSettings returned empty path")
+	}
+	defer os.Remove(path)
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading settings: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "_statusline my-project") {
+		t.Errorf("settings should pass session name as arg to _statusline, got: %s", content)
 	}
 }

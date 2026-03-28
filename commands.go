@@ -24,8 +24,6 @@ func listSessions() (matching []sessionInfo, others []sessionInfo) {
 	}
 
 	dir, _ := os.Getwd()
-	dirBase := filepath.Base(dir)
-	expected := dirBase
 
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(line)
@@ -41,7 +39,10 @@ func listSessions() (matching []sessionInfo, others []sessionInfo) {
 			}
 		}
 		info := sessionInfo{Name: name, Ago: ago}
-		if name == expected {
+
+		// Match by WorkDir from saved state, not by session name
+		state, _ := loadState(name)
+		if state.WorkDir == dir {
 			matching = append(matching, info)
 		} else {
 			others = append(others, info)
@@ -74,8 +75,51 @@ func claudeFlags() []string {
 	return os.Args[1:]
 }
 
-// runDefault: smart launcher with TUI picker
+// runDefault: attach to existing session for this cwd, or start a new one
 func runDefault() {
+	if isInsideClaudebar() {
+		fmt.Println("Already inside claudebar. Use ⌥H for shortcuts.")
+		os.Exit(1)
+	}
+
+	matching, _ := listSessions()
+
+	if len(matching) == 1 && len(claudeFlags()) == 0 {
+		// Exactly one session for this dir, no extra flags — reattach
+		tmuxExec("attach-session", "-t", matching[0].Name)
+		return
+	}
+
+	if len(matching) > 1 && len(claudeFlags()) == 0 {
+		// Multiple sessions for this dir — show picker (cwd sessions only)
+		dir, _ := os.Getwd()
+		dirName := filepath.Base(dir)
+		m := newPicker(matching, nil, dirName)
+		p := tea.NewProgram(m)
+		finalModel, err := p.Run()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
+			os.Exit(1)
+		}
+		result := finalModel.(pickerModel).result
+		if result == nil {
+			return
+		}
+		switch result.action {
+		case "attach":
+			tmuxExec("attach-session", "-t", result.session)
+		case "new":
+			startNew(claudeFlags())
+		}
+		return
+	}
+
+	// No matching sessions, or flags specified — start fresh
+	startNew(claudeFlags())
+}
+
+// runSessions: show all claudebar sessions across all projects
+func runSessions() {
 	if isInsideClaudebar() {
 		fmt.Println("Already inside claudebar. Use ⌥H for shortcuts.")
 		os.Exit(1)
@@ -85,18 +129,10 @@ func runDefault() {
 	total := len(matching) + len(others)
 
 	if total == 0 {
-		// No sessions, start fresh
-		startNew(claudeFlags())
+		fmt.Println("No active claudebar sessions.")
 		return
 	}
 
-	if len(matching) == 1 && len(others) == 0 && len(claudeFlags()) == 0 {
-		// Exactly one session for this dir, no flags, just reattach
-		tmuxExec("attach-session", "-t", matching[0].Name)
-		return
-	}
-
-	// Multiple sessions or flags specified — show TUI picker
 	dir, _ := os.Getwd()
 	dirName := filepath.Base(dir)
 
@@ -110,7 +146,6 @@ func runDefault() {
 
 	result := finalModel.(pickerModel).result
 	if result == nil {
-		// User quit without selecting
 		return
 	}
 
@@ -155,7 +190,7 @@ func startNew(extraArgs []string) {
 	}
 
 	saveState(name, state)
-	claudeCmd := launchClaudeWithExtra(state, false, extraArgs)
+	claudeCmd := launchClaudeWithExtra(name, state, false, extraArgs)
 
 	taskListID := taskListIDForSession(name)
 
@@ -356,29 +391,19 @@ func runShell() {
 // runMenu: show the full action menu as a tmux display-menu (for ⌥M keyboard shortcut)
 func runMenu() {
 	self := selfPath()
-	tmuxExec("display-menu", "-T", " #[fg=#00d4ff,bold]claudebar ", "-x", "R", "-y", "S",
-		// Session
-		"⏏ Background                 ⌥W", "b", fmt.Sprintf("run-shell '%s _detach'", self),
-		"✕ Kill session                  ", "x", fmt.Sprintf("run-shell '%s _kill'", self),
-		"",
-		// Config
-		"⟳ Toggle bypass permissions     ", "p", fmt.Sprintf("run-shell '%s _perms'", self),
-		"↑ Update Claude Code            ", "u", fmt.Sprintf("run-shell '%s _upgrade'", self),
-		"⚙ Features (env toggles)        ", "f", fmt.Sprintf("run-shell '%s _features'", self),
-		"",
-		// Panes
-		"$ Toggle shell pane          ⌥S", "s", fmt.Sprintf("run-shell '%s _shell'", self),
-		"☰ Toggle tasks pane          ⌥T", "t", fmt.Sprintf("run-shell '%s _tasks'", self),
-		"🤖 Toggle agents pane         ⌥A", "a", fmt.Sprintf("run-shell '%s _agents'", self),
-		"",
-		// Claude commands
-		"🗜 Compact context               ", "k", fmt.Sprintf("run-shell '%s _compact'", self),
-		"🔄 Clear / new chat              ", "n", fmt.Sprintf("run-shell '%s _clear'", self),
-		"📝 Toggle verbose                ", "v", fmt.Sprintf("run-shell '%s _verbose'", self),
-		"📊 Show usage                    ", "c", fmt.Sprintf("run-shell '%s _usage'", self),
-		"",
-		"? Help                       ⌥H", "h", fmt.Sprintf("run-shell '%s _help'", self),
-	)
+	args := []string{"display-menu", "-T", " #[fg=#00d4ff,bold]claudebar ", "-x", "R", "-y", "S"}
+	for _, m := range menuItems {
+		if m.Label == "" {
+			args = append(args, "")
+			continue
+		}
+		action := fmt.Sprintf("run-shell '%s %s'", self, m.Action)
+		if m.Confirm != "" {
+			action = fmt.Sprintf("confirm-before -p '%s' \"%s\"", m.Confirm, action)
+		}
+		args = append(args, m.Label, m.Key, action)
+	}
+	tmuxExec(args...)
 }
 
 // runSendToPane types a command into the claude pane and presses enter
@@ -402,8 +427,9 @@ func runHelp() {
 	fmt.Print(`claudebar — tmux harness for Claude Code
 
 USAGE
-  claudebar                    Launch or resume (interactive picker)
-  claudebar [claude flags]     Picker, with flags applied to new sessions
+  claudebar                    Attach to session for cwd, or start new
+  claudebar [claude flags]     Start new session with flags passed to claude
+  claudebar sessions (s)       List and manage all sessions across projects
 
   All flags are passed through to claude:
     claudebar --dangerously-skip-permissions

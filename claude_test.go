@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -93,7 +94,7 @@ func TestBuildClaudeArgs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			args := buildClaudeArgs(&tt.state, tt.resume)
+			args := buildClaudeArgs("test-session", &tt.state, tt.resume)
 			for _, w := range tt.want {
 				if !contains(args, w) {
 					t.Errorf("expected %q in args %v", w, args)
@@ -226,6 +227,34 @@ func TestStateSaveLoad(t *testing.T) {
 	if !restored.isFeatureOn("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS") {
 		t.Error("feature CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS should be on after restore")
 	}
+}
+
+func TestBuildClaudeArgsIncludesSettings(t *testing.T) {
+	state := &claudeSessionState{PermissionMode: "default"}
+	args := buildClaudeArgs("my-project", state, false)
+
+	settingsIdx := -1
+	for i, a := range args {
+		if a == "--settings" {
+			settingsIdx = i
+			break
+		}
+	}
+	if settingsIdx < 0 {
+		t.Fatal("--settings not found in args")
+	}
+	if settingsIdx+1 >= len(args) {
+		t.Fatal("--settings has no value")
+	}
+	settingsPath := args[settingsIdx+1]
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatalf("reading settings file %s: %v", settingsPath, err)
+	}
+	if !strings.Contains(string(data), "my-project") {
+		t.Errorf("settings file should contain session name 'my-project', got: %s", string(data))
+	}
+	os.Remove(settingsPath)
 }
 
 func contains(slice []string, s string) bool {

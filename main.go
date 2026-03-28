@@ -17,6 +17,8 @@ func main() {
 		runHelp()
 	case "version", "--version", "-v":
 		fmt.Println("claudebar v0.1.0")
+	case "sessions", "s":
+		runSessions()
 
 	// Internal (called by tmux keybinds)
 	case "_status":

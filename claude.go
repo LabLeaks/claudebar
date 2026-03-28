@@ -80,12 +80,18 @@ func stateFile(tmuxSession string) string {
 }
 
 func loadState(tmuxSession string) (*claudeSessionState, error) {
-	data, err := os.ReadFile(stateFile(tmuxSession))
+	path := stateFile(tmuxSession)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return &claudeSessionState{PermissionMode: "default"}, nil
 	}
 	var s claudeSessionState
 	if err := json.Unmarshal(data, &s); err != nil {
+		snippet := string(data)
+		if len(snippet) > 200 {
+			snippet = snippet[:200] + "..."
+		}
+		fmt.Fprintf(os.Stderr, "claudebar: corrupt state file %s: %v\nContent: %s\n", path, err, snippet)
 		return &claudeSessionState{PermissionMode: "default"}, nil
 	}
 	return &s, nil
@@ -99,7 +105,7 @@ func saveState(tmuxSession string, s *claudeSessionState) error {
 	return os.WriteFile(stateFile(tmuxSession), data, 0644)
 }
 
-func buildClaudeArgs(state *claudeSessionState, resume bool) []string {
+func buildClaudeArgs(tmuxSession string, state *claudeSessionState, resume bool) []string {
 	args := []string{}
 
 	if resume && state.SessionID != "" {
@@ -122,7 +128,7 @@ func buildClaudeArgs(state *claudeSessionState, resume bool) []string {
 
 	// Set claudebar as the statusline handler to capture usage data
 	self := selfPath()
-	settingsFile := writeStatuslineSettings(self)
+	settingsFile := writeStatuslineSettings(self, tmuxSession)
 	if settingsFile != "" {
 		args = append(args, "--settings", settingsFile)
 	}
@@ -139,13 +145,13 @@ func claudeBinary() string {
 	return path
 }
 
-func launchClaude(state *claudeSessionState, resume bool) string {
-	return launchClaudeWithExtra(state, resume, nil)
+func launchClaude(tmuxSession string, state *claudeSessionState, resume bool) string {
+	return launchClaudeWithExtra(tmuxSession, state, resume, nil)
 }
 
-func launchClaudeWithExtra(state *claudeSessionState, resume bool, extraArgs []string) string {
+func launchClaudeWithExtra(tmuxSession string, state *claudeSessionState, resume bool, extraArgs []string) string {
 	bin := claudeBinary()
-	args := buildClaudeArgs(state, resume)
+	args := buildClaudeArgs(tmuxSession, state, resume)
 	// Append any passthrough flags from the user
 	args = append(args, extraArgs...)
 	parts := []string{shellQuote(bin)}
@@ -228,7 +234,7 @@ func restartClaudeWithResume(tmuxSession string, state *claudeSessionState) erro
 	for _, env := range state.featureEnvVars() {
 		envPrefix += env + " "
 	}
-	cmd := envPrefix + launchClaude(state, true)
+	cmd := envPrefix + launchClaude(tmuxSession, state, true)
 	// Target pane 0 explicitly (the claude pane)
 	return tmuxExec("respawn-pane", "-k", "-t", tmuxSession+":0.0", cmd)
 }

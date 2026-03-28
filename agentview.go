@@ -226,7 +226,28 @@ func readLastLine(path string) string {
 	if n == 0 {
 		return ""
 	}
-	lines := strings.Split(strings.TrimSpace(string(buf[:n])), "\n")
+
+	data := string(buf[:n])
+
+	// When we didn't read from the start of the file, the first
+	// "line" in the buffer is likely a partial line cut at the 4KB
+	// boundary. Strip everything up to and including the first
+	// newline to discard that fragment.
+	if offset > 0 {
+		if idx := strings.Index(data, "\n"); idx >= 0 {
+			data = data[idx+1:]
+		} else {
+			// Entire 4KB buffer has no newline — cannot
+			// reliably extract a complete line.
+			return ""
+		}
+	}
+
+	data = strings.TrimSpace(data)
+	if data == "" {
+		return ""
+	}
+	lines := strings.Split(data, "\n")
 	last := lines[len(lines)-1]
 
 	var entry map[string]interface{}

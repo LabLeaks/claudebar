@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -117,5 +118,64 @@ func TestListTeamsForProject(t *testing.T) {
 	}
 	if teams[0] != "my-feature" {
 		t.Errorf("team = %q, want %q", teams[0], "my-feature")
+	}
+}
+
+func TestReadLastLine_SmallFile(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "small.jsonl")
+	content := `{"role":"user","content":"hello"}
+{"role":"assistant","content":"world"}
+`
+	os.WriteFile(path, []byte(content), 0644)
+
+	got := readLastLine(path)
+	if got != "[assistant] world" {
+		t.Errorf("readLastLine(small file) = %q, want %q", got, "[assistant] world")
+	}
+}
+
+func TestReadLastLine_LargeFilePartialFirstLine(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "large.jsonl")
+
+	longLine := `{"role":"user","content":"` + strings.Repeat("x", 5000) + `"}`
+	lastLine := `{"role":"assistant","content":"final answer"}`
+	content := longLine + "\n" + lastLine + "\n"
+	os.WriteFile(path, []byte(content), 0644)
+
+	got := readLastLine(path)
+	if got != "[assistant] final answer" {
+		t.Errorf("readLastLine(large file) = %q, want %q", got, "[assistant] final answer")
+	}
+}
+
+func TestReadLastLine_LargeFileNoNewlineInTail(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "noline.jsonl")
+	content := strings.Repeat("a", 6000)
+	os.WriteFile(path, []byte(content), 0644)
+
+	got := readLastLine(path)
+	if got != "" {
+		t.Errorf("readLastLine(no newline in 4KB tail) = %q, want empty string", got)
+	}
+}
+
+func TestReadLastLine_EmptyFile(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "empty.jsonl")
+	os.WriteFile(path, []byte(""), 0644)
+
+	got := readLastLine(path)
+	if got != "" {
+		t.Errorf("readLastLine(empty) = %q, want empty string", got)
+	}
+}
+
+func TestReadLastLine_NonexistentFile(t *testing.T) {
+	got := readLastLine("/nonexistent/path/to/file.jsonl")
+	if got != "" {
+		t.Errorf("readLastLine(nonexistent) = %q, want empty string", got)
 	}
 }
