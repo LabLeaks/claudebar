@@ -12,7 +12,7 @@ claudebar wraps Claude Code in a tmux session with a status bar, interactive sid
 - **Clickable menu** to toggle bypass permissions, remote control, agent teams, max thinking — restarts with `--resume` automatically
 - **Tasks pane** (`⌥T`) — interactive task viewer and manager alongside Claude
 - **Agent teams pane** (`⌥A`) — see your team members, their inboxes, and status
-- **Session defaults** — set features like DSP or agent teams to ALWAYS so every new session starts the way you want
+- **Session defaults** — set bypass permissions, agent teams, etc. to ALWAYS so every new session starts the way you want
 - **Backgrounding** — `⌥W` to detach, `claudebar` to reattach. Especially useful on remote servers where you SSH in and out
 
 ## Install
