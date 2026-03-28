@@ -2,7 +2,7 @@
 
 The missing interactive menu bar for [Claude Code](https://claude.ai/code).
 
-<!-- TODO: screenshots -->
+![claudebar screenshot](assets/screenshot.jpg)
 
 ## What it does
 
