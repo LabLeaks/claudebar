@@ -178,11 +178,25 @@ func startNew(extraArgs []string) {
 		}
 	}
 
+	// Apply global config defaults for new sessions
+	cfg := loadConfig()
+	permMode := "default"
+	if cfg.PermissionMode != "" {
+		permMode = cfg.PermissionMode
+	}
 	state := &claudeSessionState{
-		PermissionMode: "default",
+		PermissionMode: permMode,
 		WorkDir:        dir,
+		Model:          cfg.Model,
+	}
+	if len(cfg.Features) > 0 {
+		state.Features = make(map[string]bool)
+		for k, v := range cfg.Features {
+			state.Features[k] = v
+		}
 	}
 
+	// CLI flags override config defaults
 	for _, arg := range extraArgs {
 		if arg == "--dangerously-skip-permissions" {
 			state.PermissionMode = "bypassPermissions"
@@ -378,6 +392,82 @@ func runToggleFeature(envVar string) {
 
 	tmuxExec("display-message", fmt.Sprintf("%s → %s (restarting...)", label, action))
 	restartClaudeWithResume(sess, state)
+}
+
+func runSettings() {
+	self := selfPath()
+	cfg := loadConfig()
+
+	var menuArgs []string
+	menuArgs = append(menuArgs, "-T", " #[fg=#00d4ff,bold]Session Defaults ", "-x", "R", "-y", "S")
+
+	// Permission mode default
+	permIndicator := "○"
+	if cfg.PermissionMode == "bypassPermissions" {
+		permIndicator = "●"
+	}
+	menuArgs = append(menuArgs,
+		fmt.Sprintf("%s  Bypass permissions by default", permIndicator),
+		"p",
+		fmt.Sprintf("run-shell '%s _setting permission_mode'", self),
+	)
+
+	menuArgs = append(menuArgs, "")
+
+	// Feature defaults
+	for _, envVar := range featureOrder {
+		f := featureRegistry[envVar]
+		indicator := "○"
+		if cfg.Features[envVar] {
+			indicator = "●"
+		}
+		key := strings.ToLower(string(f.Label[0]))
+		menuArgs = append(menuArgs,
+			fmt.Sprintf("%s  %s", indicator, f.Label),
+			key,
+			fmt.Sprintf("run-shell '%s _setting feature %s'", self, envVar),
+		)
+	}
+
+	tmuxExec(append([]string{"display-menu"}, menuArgs...)...)
+}
+
+func runToggleSetting(args []string) {
+	if len(args) == 0 {
+		return
+	}
+	cfg := loadConfig()
+
+	switch args[0] {
+	case "permission_mode":
+		if cfg.PermissionMode == "bypassPermissions" {
+			cfg.PermissionMode = ""
+		} else {
+			cfg.PermissionMode = "bypassPermissions"
+		}
+		tmuxExec("display-message", fmt.Sprintf("Default permissions → %s", map[bool]string{true: "bypass", false: "normal"}[cfg.PermissionMode == "bypassPermissions"]))
+
+	case "feature":
+		if len(args) < 2 {
+			return
+		}
+		envVar := args[1]
+		if cfg.Features == nil {
+			cfg.Features = make(map[string]bool)
+		}
+		cfg.Features[envVar] = !cfg.Features[envVar]
+		label := envVar
+		if f, ok := featureRegistry[envVar]; ok {
+			label = f.Label
+		}
+		action := "ON"
+		if !cfg.Features[envVar] {
+			action = "OFF"
+		}
+		tmuxExec("display-message", fmt.Sprintf("Default %s → %s", label, action))
+	}
+
+	saveConfig(cfg)
 }
 
 func runShell() {

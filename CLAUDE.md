@@ -28,6 +28,7 @@ Typical flow: Architect → Developer (+ Researcher/UX as needed) → Code Revie
 ## Known Traps
 
 - **Do NOT add tmux hooks for side pane cleanup.** We tried `pane-exited`, `pane-died`, `after-pane-died`, `claudebar _cleanup` chains — ALL cause `zsh: killed` on startup because they also fire during `respawn-pane` and failed starts. The polling approach works.
+- **`make install` must `rm -f` before `cp`.** macOS kills newly-executed binaries when you overwrite a running binary in-place (`cp` reuses the inode). Running tmux sessions hold the old binary open via `run-shell` keybinds. You MUST `rm -f` first to unlink the old inode, then `cp` creates a fresh one. Without this you get `zsh: killed` on every invocation. This cost us hours to debug.
 - **Path encoding must keep the leading dash.** `/Users/gk/foo` → `-Users-gk-foo`, NOT `Users-gk-foo`. Session resume silently fails otherwise.
 - **Stale tmux servers.** If you get mysterious crashes after rebuilding, run `tmux -L claudebar kill-server` first.
 - **Don't double-escape `%` in status bar.** It works as-is in tmux 3.5a.

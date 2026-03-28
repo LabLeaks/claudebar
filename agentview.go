@@ -277,6 +277,7 @@ const (
 	agentOverview agentViewMode = iota
 	agentMemberDetail
 	agentInboxDetail
+	agentSubagentDetail
 )
 
 type agentItem struct {
@@ -293,9 +294,10 @@ type agentModel struct {
 	projectDir     string
 	teams          []string
 	subagents      []subagentInfo
-	selectedTeam   string
-	selectedMember *teamMember
-	inbox          []inboxMessage
+	selectedTeam     string
+	selectedMember   *teamMember
+	selectedSubagent *subagentInfo
+	inbox            []inboxMessage
 	width          int
 	height         int
 }
@@ -406,6 +408,8 @@ func (m agentModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateMemberDetail(msg)
 		case agentInboxDetail:
 			return m.updateInboxDetail(msg)
+		case agentSubagentDetail:
+			return m.updateSubagentDetail(msg)
 		}
 	}
 	return m, nil
@@ -436,6 +440,9 @@ func (m agentModel) updateOverview(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.selectedTeam = item.team
 				m.selectedMember = item.member
 				m.mode = agentMemberDetail
+			} else if item.kind == "subagent" && item.subagent != nil {
+				m.selectedSubagent = item.subagent
+				m.mode = agentSubagentDetail
 			}
 		}
 	}
@@ -497,6 +504,16 @@ func (m agentModel) updateInboxDetail(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 	return m, nil
 }
 
+func (m agentModel) updateSubagentDetail(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "d", "ctrl+c":
+		return m, tea.Quit
+	case "esc", "backspace":
+		m.mode = agentOverview
+	}
+	return m, nil
+}
+
 var (
 	agentTitleStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#00d4ff")).Bold(true)
 	agentDimStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#555555"))
@@ -515,6 +532,8 @@ func (m agentModel) View() tea.View {
 		v = tea.NewView(m.viewMemberDetail())
 	case agentInboxDetail:
 		v = tea.NewView(m.viewInbox())
+	case agentSubagentDetail:
+		v = tea.NewView(m.viewSubagentDetail())
 	default:
 		v = tea.NewView(m.viewOverview())
 	}
@@ -698,6 +717,28 @@ func (m agentModel) viewInbox() string {
 	}
 
 	b.WriteString(agentHintStyle.Render("  esc back  e edit inbox  d close") + "\n")
+	return b.String()
+}
+
+func (m agentModel) viewSubagentDetail() string {
+	if m.selectedSubagent == nil {
+		return "No subagent selected"
+	}
+	sa := m.selectedSubagent
+	var b strings.Builder
+
+	b.WriteString(agentTitleStyle.Render("🔀 Subagent") + "\n")
+	b.WriteString(agentDimStyle.Render("─────────────────────────────") + "\n\n")
+
+	b.WriteString(agentLabelStyle.Render("  ID:      ") + agentValueStyle.Render(sa.ID) + "\n")
+	b.WriteString(agentLabelStyle.Render("  Active:  ") + agentValueStyle.Render(timeAgoShort(sa.ModTime)) + "\n")
+
+	if sa.LastLine != "" {
+		b.WriteString(agentLabelStyle.Render("  Last:    ") + agentValueStyle.Render(sa.LastLine) + "\n")
+	}
+
+	b.WriteString("\n")
+	b.WriteString(agentHintStyle.Render("  esc back  d close") + "\n")
 	return b.String()
 }
 

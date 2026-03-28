@@ -65,6 +65,47 @@ func (s *claudeSessionState) featureEnvVars() []string {
 	return envs
 }
 
+// globalConfig holds user preferences that apply to all new sessions
+type globalConfig struct {
+	PermissionMode string          `json:"permission_mode,omitempty"` // default permission mode for new sessions
+	Features       map[string]bool `json:"features,omitempty"`        // features enabled by default
+	Model          string          `json:"model,omitempty"`           // default model
+}
+
+func configDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	d := filepath.Join(home, ".config", "claudebar")
+	os.MkdirAll(d, 0755)
+	return d
+}
+
+func configFile() string {
+	return filepath.Join(configDir(), "config.json")
+}
+
+func loadConfig() *globalConfig {
+	data, err := os.ReadFile(configFile())
+	if err != nil {
+		return &globalConfig{}
+	}
+	var cfg globalConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return &globalConfig{}
+	}
+	return &cfg
+}
+
+func saveConfig(cfg *globalConfig) error {
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(configFile(), data, 0644)
+}
+
 func stateDir() string {
 	dir, err := os.UserConfigDir()
 	if err != nil {

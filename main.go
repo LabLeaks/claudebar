@@ -64,6 +64,12 @@ func main() {
 		if len(os.Args) > 2 {
 			runToggleFeature(os.Args[2])
 		}
+	case "_settings":
+		runSettings()
+	case "_setting":
+		if len(os.Args) > 2 {
+			runToggleSetting(os.Args[2:])
+		}
 	case "_statusline":
 		runStatusLine()
 

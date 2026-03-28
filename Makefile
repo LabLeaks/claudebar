@@ -8,6 +8,7 @@ build:
 
 install: build
 	mkdir -p $(PREFIX)
+	rm -f $(PREFIX)/$(BINARY)
 	cp $(BINARY) $(PREFIX)/$(BINARY)
 
 clean:
