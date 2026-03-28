@@ -38,6 +38,8 @@ claudebar --model sonnet   # Pass any Claude Code flags
 claudebar sessions         # Manage sessions across projects
 ```
 
+![claudebar menu](assets/screenshot-menu.jpg) ![claudebar features](assets/screenshot-features.jpg)
+
 ### Shortcuts
 
 | Key | Action |
