@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -74,12 +73,6 @@ func (m inboxMessage) displayText() string {
 	return m.Text
 }
 
-type subagentInfo struct {
-	ID       string
-	ModTime  time.Time
-	LastLine string
-}
-
 // --- Data loading ---
 
 // listTeamsForProject returns teams whose cwd matches the given project directory
@@ -143,65 +136,6 @@ func loadInbox(teamName, agentName string) []inboxMessage {
 	return msgs
 }
 
-func findSubagentTranscripts() []subagentInfo {
-	home, _ := os.UserHomeDir()
-	projectsDir := filepath.Join(home, ".claude", "projects")
-
-	cwd := os.Getenv("CLAUDEBAR_CWD")
-	if cwd == "" {
-		cwd, _ = os.Getwd()
-	}
-	if cwd == "" {
-		return nil
-	}
-
-	encoded := strings.ReplaceAll(cwd, "/", "-")
-	searchDir := filepath.Join(projectsDir, encoded)
-	if _, err := os.Stat(searchDir); err != nil {
-		return nil
-	}
-
-	seen := make(map[string]subagentInfo)
-
-	filepath.Walk(searchDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
-		}
-		if !strings.Contains(path, "subagents") || !strings.HasSuffix(path, ".jsonl") {
-			return nil
-		}
-		if time.Since(info.ModTime()) > 5*time.Minute {
-			return nil
-		}
-
-		id := strings.TrimSuffix(filepath.Base(path), ".jsonl")
-		id = strings.TrimPrefix(id, "agent-")
-
-		if existing, ok := seen[id]; ok && existing.ModTime.After(info.ModTime()) {
-			return nil
-		}
-
-		seen[id] = subagentInfo{
-			ID:       id,
-			ModTime:  info.ModTime(),
-			LastLine: readLastLine(path),
-		}
-		return nil
-	})
-
-	agents := make([]subagentInfo, 0, len(seen))
-	for _, sa := range seen {
-		agents = append(agents, sa)
-	}
-	sort.Slice(agents, func(i, j int) bool {
-		return agents[i].ModTime.After(agents[j].ModTime)
-	})
-
-	if len(agents) > 15 {
-		agents = agents[:15]
-	}
-	return agents
-}
 
 func readLastLine(path string) string {
 	f, err := os.Open(path)
@@ -277,14 +211,12 @@ const (
 	agentOverview agentViewMode = iota
 	agentMemberDetail
 	agentInboxDetail
-	agentSubagentDetail
 )
 
 type agentItem struct {
-	kind     string // "team-header", "member", "subagent-header", "subagent"
-	team     string
-	member   *teamMember
-	subagent *subagentInfo
+	kind   string // "team-header", "member"
+	team   string
+	member *teamMember
 }
 
 type agentModel struct {
@@ -295,10 +227,8 @@ type agentModel struct {
 	showPrompt     bool
 	projectDir     string
 	teams          []string
-	subagents      []subagentInfo
 	selectedTeam     string
 	selectedMember   *teamMember
-	selectedSubagent *subagentInfo
 	inbox            []inboxMessage
 	width          int
 	height         int
@@ -320,7 +250,6 @@ func newAgentModel(projectDir string) agentModel {
 
 func (m *agentModel) refresh() {
 	m.teams = listTeamsForProject(m.projectDir)
-	m.subagents = findSubagentTranscripts()
 	m.buildItems()
 }
 
@@ -343,16 +272,6 @@ func (m *agentModel) buildItems() {
 		}
 	}
 
-	if len(m.subagents) > 0 {
-		items = append(items, agentItem{kind: "subagent-header"})
-		for i := range m.subagents {
-			items = append(items, agentItem{
-				kind:     "subagent",
-				subagent: &m.subagents[i],
-			})
-		}
-	}
-
 	m.items = items
 	if m.cursor >= len(m.items) {
 		m.cursor = 0
@@ -364,7 +283,7 @@ func (m *agentModel) skipHeaders(dir int) {
 	for i := 0; i < len(m.items); i++ {
 		if m.cursor >= 0 && m.cursor < len(m.items) {
 			kind := m.items[m.cursor].kind
-			if kind != "team-header" && kind != "subagent-header" {
+			if kind != "team-header" {
 				return
 			}
 		}
@@ -439,8 +358,6 @@ func (m agentModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateMemberDetail(msg)
 		case agentInboxDetail:
 			return m.updateInboxDetail(msg)
-		case agentSubagentDetail:
-			return m.updateSubagentDetail(msg)
 		}
 	}
 	return m, nil
@@ -471,9 +388,6 @@ func (m agentModel) updateOverview(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.selectedTeam = item.team
 				m.selectedMember = item.member
 				m.mode = agentMemberDetail
-			} else if item.kind == "subagent" && item.subagent != nil {
-				m.selectedSubagent = item.subagent
-				m.mode = agentSubagentDetail
 			}
 		}
 	}
@@ -553,16 +467,6 @@ func (m agentModel) updateInboxDetail(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 	return m, nil
 }
 
-func (m agentModel) updateSubagentDetail(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "d", "ctrl+c":
-		return m, tea.Quit
-	case "esc", "backspace":
-		m.mode = agentOverview
-	}
-	return m, nil
-}
-
 var (
 	agentTitleStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#00d4ff")).Bold(true)
 	agentDimStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#555555"))
@@ -634,8 +538,6 @@ func (m agentModel) View() tea.View {
 		content = m.applyScroll(m.viewMemberDetail())
 	case agentInboxDetail:
 		content = m.applyScroll(m.viewInbox())
-	case agentSubagentDetail:
-		content = m.applyScroll(m.viewSubagentDetail())
 	default:
 		content = m.applyOverviewScroll(m.viewOverview())
 	}
@@ -648,11 +550,11 @@ func (m agentModel) View() tea.View {
 func (m agentModel) viewOverview() string {
 	var b strings.Builder
 
-	b.WriteString(agentTitleStyle.Render("🤖 Agents & Teams") + "\n")
+	b.WriteString(agentTitleStyle.Render("Agent Teams") + "\n")
 	b.WriteString(agentDimStyle.Render("─────────────────────────────") + "\n")
 
 	if len(m.items) == 0 {
-		b.WriteString("\n" + agentDimStyle.Render("  No teams or subagents for this project") + "\n")
+		b.WriteString("\n" + agentDimStyle.Render("  No active teams for this project") + "\n")
 	}
 
 	for i, item := range m.items {
@@ -685,34 +587,6 @@ func (m agentModel) viewOverview() string {
 					agentDimStyle.Render(agentType)))
 			}
 
-		case "subagent-header":
-			b.WriteString("\n" + agentTitleStyle.Render("  🔀 Subagents") + "\n")
-
-		case "subagent":
-			cursor := "  "
-			if i == m.cursor {
-				cursor = "▸ "
-			}
-			sa := item.subagent
-			idShort := sa.ID
-			if len(idShort) > 10 {
-				idShort = idShort[:10]
-			}
-			indicator := "○"
-			if time.Since(sa.ModTime) < 30*time.Second {
-				indicator = "●"
-			}
-			ago := timeAgoShort(sa.ModTime)
-
-			if i == m.cursor {
-				b.WriteString(agentCursorStyle.Render(fmt.Sprintf("%s%s %s", cursor, indicator, idShort)) +
-					" " + agentDimStyle.Render(ago) + "\n")
-			} else {
-				b.WriteString(fmt.Sprintf("  %s %s %s\n",
-					agentDimStyle.Render(indicator),
-					agentNormalStyle.Render(idShort),
-					agentDimStyle.Render(ago)))
-			}
 		}
 	}
 
@@ -830,28 +704,6 @@ func (m agentModel) viewInbox() string {
 	}
 
 	b.WriteString(agentHintStyle.Render("  esc back  e edit inbox  d close") + "\n")
-	return b.String()
-}
-
-func (m agentModel) viewSubagentDetail() string {
-	if m.selectedSubagent == nil {
-		return "No subagent selected"
-	}
-	sa := m.selectedSubagent
-	var b strings.Builder
-
-	b.WriteString(agentTitleStyle.Render("🔀 Subagent") + "\n")
-	b.WriteString(agentDimStyle.Render("─────────────────────────────") + "\n\n")
-
-	b.WriteString(agentLabelStyle.Render("  ID:      ") + agentValueStyle.Render(sa.ID) + "\n")
-	b.WriteString(agentLabelStyle.Render("  Active:  ") + agentValueStyle.Render(timeAgoShort(sa.ModTime)) + "\n")
-
-	if sa.LastLine != "" {
-		b.WriteString(agentLabelStyle.Render("  Last:    ") + agentValueStyle.Render(sa.LastLine) + "\n")
-	}
-
-	b.WriteString("\n")
-	b.WriteString(agentHintStyle.Render("  esc back  d close") + "\n")
 	return b.String()
 }
 

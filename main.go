@@ -36,6 +36,8 @@ func main() {
 		runUpgrade()
 	case "_perms":
 		runPerms()
+	case "_rc":
+		runToggleRC()
 	case "_tasks":
 		runTasks()
 	case "_shell":
@@ -70,12 +72,6 @@ func main() {
 	case "_toggle":
 		if len(os.Args) > 2 {
 			runToggleFeature(os.Args[2])
-		}
-	case "_settings":
-		runSettings()
-	case "_setting":
-		if len(os.Args) > 2 {
-			runToggleSetting(os.Args[2:])
 		}
 	case "_statusline":
 		runStatusLine()

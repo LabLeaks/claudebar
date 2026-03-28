@@ -60,7 +60,7 @@ func peakInfo() (isPeak bool, localStart, localEnd string) {
 		monday := nowPT.AddDate(0, 0, daysUntilMonday)
 		startPT := time.Date(monday.Year(), monday.Month(), monday.Day(), 5, 0, 0, 0, pt)
 		endPT := time.Date(monday.Year(), monday.Month(), monday.Day(), 11, 0, 0, 0, pt)
-		return false, startPT.In(now.Location()).Format("3:04pm MST"), endPT.In(now.Location()).Format("3:04pm MST")
+		return false, startPT.In(now.Location()).Format("Mon 3:04pm MST"), endPT.In(now.Location()).Format("3:04pm MST")
 	}
 
 	hour := nowPT.Hour()

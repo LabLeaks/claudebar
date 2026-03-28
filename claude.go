@@ -13,6 +13,7 @@ import (
 type claudeSessionState struct {
 	SessionID      string            `json:"session_id"`
 	PermissionMode string            `json:"permission_mode"` // "plan", "default", "bypassPermissions"
+	RemoteControl  bool              `json:"remote_control,omitempty"`
 	Model          string            `json:"model"`
 	WorkDir        string            `json:"work_dir"`
 	Features       map[string]bool   `json:"features,omitempty"` // toggleable env var features
@@ -68,6 +69,7 @@ func (s *claudeSessionState) featureEnvVars() []string {
 // globalConfig holds user preferences that apply to all new sessions
 type globalConfig struct {
 	PermissionMode string          `json:"permission_mode,omitempty"` // default permission mode for new sessions
+	RemoteControl  bool            `json:"remote_control,omitempty"`  // enable --remote-control by default
 	Features       map[string]bool `json:"features,omitempty"`        // features enabled by default
 	Model          string          `json:"model,omitempty"`           // default model
 }
@@ -158,6 +160,10 @@ func buildClaudeArgs(tmuxSession string, state *claudeSessionState, resume bool)
 		args = append(args, "--dangerously-skip-permissions")
 	case "plan":
 		args = append(args, "--permission-mode", "plan")
+	}
+
+	if state.RemoteControl {
+		args = append(args, "--remote-control")
 	}
 
 	if state.Model != "" {

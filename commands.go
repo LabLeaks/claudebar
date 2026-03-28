@@ -186,6 +186,7 @@ func startNew(extraArgs []string) {
 	}
 	state := &claudeSessionState{
 		PermissionMode: permMode,
+		RemoteControl:  cfg.RemoteControl,
 		WorkDir:        dir,
 		Model:          cfg.Model,
 	}
@@ -301,6 +302,23 @@ func runPerms() {
 	restartClaudeWithResume(sess, state)
 }
 
+func runToggleRC() {
+	sess, _ := tmuxOutput("display-message", "-p", "#{session_name}")
+	state, _ := loadState(sess)
+	if state.WorkDir == "" {
+		dir, _ := os.Getwd()
+		state.WorkDir = dir
+	}
+
+	state.RemoteControl = !state.RemoteControl
+	action := "ON"
+	if !state.RemoteControl {
+		action = "OFF"
+	}
+	tmuxExec("display-message", fmt.Sprintf("Remote Control → %s (restarting...)", action))
+	restartClaudeWithResume(sess, state)
+}
+
 // togglePane checks if a tracked pane exists and kills it (toggle off),
 // or creates a new one with the given command (toggle on).
 func togglePane(optionName, cmd, direction, size string) {
@@ -331,9 +349,16 @@ func runTasks() {
 }
 
 func runAgents() {
-	self := selfPath()
 	sess, _ := tmuxOutput("display-message", "-p", "#{session_name}")
 	state, _ := loadState(sess)
+
+	// Check if agent teams are enabled
+	if !state.isFeatureOn("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS") {
+		tmuxExec("display-message", "Agent Teams not enabled — toggle in Features menu (⚙)")
+		return
+	}
+
+	self := selfPath()
 	workDir := state.WorkDir
 	if workDir == "" {
 		workDir, _ = os.Getwd()
@@ -343,25 +368,64 @@ func runAgents() {
 	togglePane("@claudebar-agents-pane", agentCmd, "-h", "35%")
 }
 
+// featureState returns ○ OFF, ● ON, or ◉ ALWAYS for a feature
+// based on session state and global config.
+func featureState(sessionOn, configOn bool) string {
+	if configOn {
+		return "◉ ALWAYS"
+	}
+	if sessionOn {
+		return "●    ON"
+	}
+	return "○   OFF"
+}
+
+// cycleFeature advances: OFF → ON → ALWAYS → OFF
+// Returns new session value, new config value
+func cycleFeature(sessionOn, configOn bool) (bool, bool) {
+	if configOn {
+		// ALWAYS → OFF
+		return false, false
+	}
+	if sessionOn {
+		// ON → ALWAYS
+		return true, true
+	}
+	// OFF → ON
+	return true, false
+}
+
 func runFeatures() {
 	self := selfPath()
 	sess, _ := tmuxOutput("display-message", "-p", "#{session_name}")
 	state, _ := loadState(sess)
+	cfg := loadConfig()
 
 	var menuArgs []string
-	menuArgs = append(menuArgs, "-T", " #[fg=#00d4ff,bold]Features (toggle & restart) ", "-x", "R", "-y", "S")
+	menuArgs = append(menuArgs, "-T", " #[fg=#00d4ff,bold]Features  ○ off  ● on  ◉ always ", "-x", "R", "-y", "S")
 
+	// Bypass permissions
+	menuArgs = append(menuArgs,
+		fmt.Sprintf("%s  Bypass permissions", featureState(state.PermissionMode == "bypassPermissions", cfg.PermissionMode == "bypassPermissions")),
+		"p",
+		fmt.Sprintf("run-shell '%s _toggle bypass_permissions'", self),
+	)
+
+	// Remote control
+	menuArgs = append(menuArgs,
+		fmt.Sprintf("%s  Remote Control", featureState(state.RemoteControl, cfg.RemoteControl)),
+		"r",
+		fmt.Sprintf("run-shell '%s _toggle remote_control'", self),
+	)
+
+	menuArgs = append(menuArgs, "")
+
+	// Env var features
 	for _, envVar := range featureOrder {
 		f := featureRegistry[envVar]
-		indicator := "○"
-		if state.isFeatureOn(envVar) {
-			indicator = "●"
-		}
-		// Use first unique char as shortcut key
-		key := strings.ToLower(string(f.Label[0]))
 		menuArgs = append(menuArgs,
-			fmt.Sprintf("%s  %s", indicator, f.Label),
-			key,
+			fmt.Sprintf("%s  %s", featureState(state.isFeatureOn(envVar), cfg.Features[envVar]), f.Label),
+			strings.ToLower(string(f.Label[0])),
 			fmt.Sprintf("run-shell '%s _toggle %s'", self, envVar),
 		)
 	}
@@ -376,97 +440,91 @@ func runToggleFeature(envVar string) {
 		dir, _ := os.Getwd()
 		state.WorkDir = dir
 	}
-
-	f, ok := featureRegistry[envVar]
-	label := envVar
-	if ok {
-		label = f.Label
-	}
-
-	state.toggleFeature(envVar)
-	action := "ON"
-	if !state.isFeatureOn(envVar) {
-		action = "OFF"
-	}
-
-	tmuxExec("display-message", fmt.Sprintf("%s → %s (restarting...)", label, action))
-	restartClaudeWithResume(sess, state)
-}
-
-func runSettings() {
-	self := selfPath()
 	cfg := loadConfig()
 
-	var menuArgs []string
-	menuArgs = append(menuArgs, "-T", " #[fg=#00d4ff,bold]Session Defaults ", "-x", "R", "-y", "S")
-
-	// Permission mode default
-	permIndicator := "○"
-	if cfg.PermissionMode == "bypassPermissions" {
-		permIndicator = "●"
-	}
-	menuArgs = append(menuArgs,
-		fmt.Sprintf("%s  Bypass permissions by default", permIndicator),
-		"p",
-		fmt.Sprintf("run-shell '%s _setting permission_mode'", self),
-	)
-
-	menuArgs = append(menuArgs, "")
-
-	// Feature defaults
-	for _, envVar := range featureOrder {
-		f := featureRegistry[envVar]
-		indicator := "○"
-		if cfg.Features[envVar] {
-			indicator = "●"
-		}
-		key := strings.ToLower(string(f.Label[0]))
-		menuArgs = append(menuArgs,
-			fmt.Sprintf("%s  %s", indicator, f.Label),
-			key,
-			fmt.Sprintf("run-shell '%s _setting feature %s'", self, envVar),
-		)
-	}
-
-	tmuxExec(append([]string{"display-menu"}, menuArgs...)...)
-}
-
-func runToggleSetting(args []string) {
-	if len(args) == 0 {
-		return
-	}
-	cfg := loadConfig()
-
-	switch args[0] {
-	case "permission_mode":
-		if cfg.PermissionMode == "bypassPermissions" {
-			cfg.PermissionMode = ""
+	switch envVar {
+	case "bypass_permissions":
+		sessionOn := state.PermissionMode == "bypassPermissions"
+		configOn := cfg.PermissionMode == "bypassPermissions"
+		newSession, newConfig := cycleFeature(sessionOn, configOn)
+		if newSession {
+			state.PermissionMode = "bypassPermissions"
 		} else {
+			state.PermissionMode = "default"
+		}
+		if newConfig {
 			cfg.PermissionMode = "bypassPermissions"
+		} else {
+			cfg.PermissionMode = ""
 		}
-		tmuxExec("display-message", fmt.Sprintf("Default permissions → %s", map[bool]string{true: "bypass", false: "normal"}[cfg.PermissionMode == "bypassPermissions"]))
 
-	case "feature":
-		if len(args) < 2 {
-			return
+	case "remote_control":
+		newSession, newConfig := cycleFeature(state.RemoteControl, cfg.RemoteControl)
+		state.RemoteControl = newSession
+		cfg.RemoteControl = newConfig
+
+	default:
+		// Env var feature
+		sessionOn := state.isFeatureOn(envVar)
+		configOn := cfg.Features[envVar]
+		newSession, newConfig := cycleFeature(sessionOn, configOn)
+
+		if state.Features == nil {
+			state.Features = make(map[string]bool)
 		}
-		envVar := args[1]
+		state.Features[envVar] = newSession
+
 		if cfg.Features == nil {
 			cfg.Features = make(map[string]bool)
 		}
-		cfg.Features[envVar] = !cfg.Features[envVar]
-		label := envVar
-		if f, ok := featureRegistry[envVar]; ok {
-			label = f.Label
-		}
-		action := "ON"
-		if !cfg.Features[envVar] {
-			action = "OFF"
-		}
-		tmuxExec("display-message", fmt.Sprintf("Default %s → %s", label, action))
+		cfg.Features[envVar] = newConfig
 	}
 
 	saveConfig(cfg)
+
+	label := envVar
+	if f, ok := featureRegistry[envVar]; ok {
+		label = f.Label
+	}
+	switch envVar {
+	case "bypass_permissions":
+		label = "Bypass permissions"
+	case "remote_control":
+		label = "Remote Control"
+	}
+
+	// Determine new display state for message
+	var newState string
+	switch envVar {
+	case "bypass_permissions":
+		newState = featureState(state.PermissionMode == "bypassPermissions", cfg.PermissionMode == "bypassPermissions")
+	case "remote_control":
+		newState = featureState(state.RemoteControl, cfg.RemoteControl)
+	default:
+		newState = featureState(state.isFeatureOn(envVar), cfg.Features[envVar])
+	}
+
+	// Only restart if the session state actually changed
+	var sessionChanged bool
+	switch envVar {
+	case "bypass_permissions":
+		old, _ := loadState(sess)
+		sessionChanged = (old.PermissionMode != state.PermissionMode)
+	case "remote_control":
+		old, _ := loadState(sess)
+		sessionChanged = (old.RemoteControl != state.RemoteControl)
+	default:
+		old, _ := loadState(sess)
+		sessionChanged = (old.isFeatureOn(envVar) != state.isFeatureOn(envVar))
+	}
+
+	if sessionChanged {
+		tmuxExec("display-message", fmt.Sprintf("%s → %s (restarting...)", label, newState))
+		restartClaudeWithResume(sess, state)
+	} else {
+		tmuxExec("display-message", fmt.Sprintf("%s → %s", label, newState))
+		saveState(sess, state)
+	}
 }
 
 func runShell() {

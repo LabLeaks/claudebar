@@ -16,7 +16,7 @@ Set Framerate 30
 
 # Start in a sample project directory
 Hide
-Type "cd /tmp && mkdir -p my-project && cd my-project"
+Type "cd /tmp && mkdir -p demo-project && cd demo-project"
 Enter
 Sleep 500ms
 Show
@@ -27,33 +27,32 @@ Sleep 500ms
 Enter
 
 # Wait for tmux + Claude to initialize
-Sleep 6s
+Sleep 8s
 
-# 2. Open the menu (Alt+M) — show it off
-Sleep 1s
-Alt+m
-Sleep 2.5s
+# 2. Open the menu
+Alt+M
+Sleep 3s
 
-# 3. Close menu (Escape)
+# 3. Close menu
 Escape
 Sleep 1.5s
 
-# 4. Toggle tasks pane (Alt+T)
-Alt+t
-Sleep 2.5s
+# 4. Toggle tasks pane
+Alt+T
+Sleep 3s
 
-# 5. Toggle tasks off (Alt+T)
-Alt+t
+# 5. Toggle tasks off
+Alt+T
 Sleep 1.5s
 
-# 6. Toggle agents pane (Alt+A)
-Alt+a
-Sleep 2.5s
+# 6. Toggle agents pane
+Alt+A
+Sleep 3s
 
-# 7. Toggle agents off (Alt+A)
-Alt+a
+# 7. Toggle agents off
+Alt+A
 Sleep 1.5s
 
-# 8. Detach (Alt+W) — session persists in background
-Alt+w
+# 8. Detach — session persists in background
+Alt+W
 Sleep 2s

@@ -28,13 +28,13 @@ var menuItems = []menuItem{
 	{"✕ Kill session                  ", "x", "_kill", "Kill this session? (y/n)"},
 	{},
 	{"⟳ Toggle bypass permissions     ", "p", "_perms", ""},
-	{"↑ Update Claude Code            ", "u", "_upgrade", ""},
-	{"⚙ Features (env toggles)        ", "f", "_features", ""},
-	{"≡ Settings (session defaults)   ", "g", "_settings", ""},
+	{"~ Toggle remote control         ", "r", "_rc", ""},
 	{},
-	{"$ Toggle shell pane          ⌥S", "s", "_shell", ""},
-	{"# Toggle tasks pane          ⌥T", "t", "_tasks", ""},
-	{"@ Toggle agents pane         ⌥A", "a", "_agents", ""},
+	{"⚙ Features & defaults           ", "f", "_features", ""},
+	{},
+	{"$ Shell pane                 ⌥S", "s", "_shell", ""},
+	{"# Tasks pane                 ⌥T", "t", "_tasks", ""},
+	{"@ Agent teams pane           ⌥A", "a", "_agents", ""},
 	{},
 	{"» Compact context               ", "k", "_compact", ""},
 	{"↺ Clear / new chat              ", "n", "_clear", ""},
@@ -42,6 +42,7 @@ var menuItems = []menuItem{
 	{"∿ Show usage                    ", "c", "_usage", ""},
 	{},
 	{"? Help                       ⌥H", "h", "_help", ""},
+	{"↑ Update Claude Code            ", "u", "_upgrade", ""},
 }
 
 func tmuxExec(args ...string) error {
