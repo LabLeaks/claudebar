@@ -4,25 +4,16 @@ The missing interactive menu bar for [Claude Code](https://claude.ai/code).
 
 <!-- TODO: screenshots -->
 
-## The problem
+## What it does
 
-You close your terminal. Your Claude session is gone. You restart, lose your conversation, re-explain your codebase.
+claudebar wraps Claude Code in a tmux session with a status bar, interactive side panels, and a clickable menu. Everything you'd otherwise do with slash commands or CLI flags, accessible from a persistent UI.
 
-You're 80% through your rate limit but don't know it. You're working during peak hours but can't tell. You want to toggle bypass permissions but that means restarting Claude and losing context.
-
-You have agent teams running but no way to see what they're doing without typing slash commands. Same for tasks.
-
-## What claudebar does
-
-claudebar wraps Claude Code in a persistent tmux session. Everything survives closing the terminal — your conversation, your context, your agent teams.
-
-**Never lose a session again.** Background with `⌥W`, close the terminal, come back hours later, type `claudebar` — you're exactly where you left off.
-
-**See what matters at a glance.** The status bar shows peak hours, usage percentage, and reset times. No more guessing if you're about to hit the rate limit.
-
-**Change settings without losing context.** Toggle bypass permissions, remote control, agent teams, or any feature — claudebar automatically restarts Claude with `--resume`. Your conversation history is preserved.
-
-**Interactive side panels.** View and manage tasks, agent teams, or open a shell — all alongside Claude, no slash commands needed.
+- **Status bar** with peak hours, usage %, and reset countdown — always visible, no `/usage` needed
+- **Clickable menu** to toggle bypass permissions, remote control, agent teams, max thinking — restarts with `--resume` automatically
+- **Tasks pane** (`⌥T`) — interactive task viewer and manager alongside Claude
+- **Agent teams pane** (`⌥A`) — see your team members, their inboxes, and status
+- **Session defaults** — set features like DSP or agent teams to ALWAYS so every new session starts the way you want
+- **Backgrounding** — `⌥W` to detach, `claudebar` to reattach. Especially useful on remote servers where you SSH in and out
 
 ## Install
 
@@ -42,35 +33,33 @@ Requires [tmux](https://github.com/tmux/tmux) (`brew install tmux`).
 ## Usage
 
 ```bash
-claudebar                  # Launch or reattach to session for this directory
+claudebar                  # Launch or reattach for this directory
 claudebar --model sonnet   # Pass any Claude Code flags
-claudebar sessions         # Manage all sessions across projects
+claudebar sessions         # Manage sessions across projects
 ```
 
 ### Shortcuts
 
 | Key | Action |
 |-----|--------|
-| `⌥W` | Background (session keeps running) |
 | `⌥M` | Menu (or click the status bar) |
 | `⌥T` | Tasks pane |
 | `⌥A` | Agent teams pane |
 | `⌥S` | Shell pane |
+| `⌥W` | Background session |
 | `⌥H` | Help |
 
 ### Features menu
 
-Toggle features without leaving Claude. Each cycles through three states:
+Toggle features without restarting manually. Each cycles through:
 
-- `○ OFF` — disabled
-- `● ON` — enabled this session
-- `◉ ALWAYS` — default for all new sessions
+- `○ OFF` → `● ON` → `◉ ALWAYS` (default for all new sessions)
 
-Includes: bypass permissions, remote control, agent teams, max thinking tokens, and more.
+Bypass permissions, remote control, agent teams, max thinking tokens, and more. Defaults saved to `~/.config/claudebar/config.json`.
 
 ## How it works
 
-Dedicated tmux socket (`-L claudebar`), isolated from your other tmux sessions. Sessions are scoped to your working directory. Feature changes atomically restart Claude with `--resume` — side panes survive, conversation preserved.
+Dedicated tmux socket (`-L claudebar`), isolated from your other tmux sessions. Feature changes atomically restart Claude with `--resume` — side panes survive, conversation preserved.
 
 ## License
 
