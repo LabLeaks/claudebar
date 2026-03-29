@@ -7,7 +7,7 @@ Everything here is undocumented and may change without notice. This is the regre
 | Path | What we use it for | Where in code |
 |------|--------------------|---------------|
 | `~/.claude/projects/{encoded-dir}/{session-id}.jsonl` | Session transcripts — ID extraction, claimed/unclaimed detection | claude.go |
-| `~/.claude/tasks/{list-id}/{task-id}.json` | Task list data for side pane. List ID = `claudebar-<session-name>` | taskview.go |
+| `~/.claude/tasks/{list-id}/{task-id}.json` | Task list data for side pane | taskview.go |
 | `~/.claude/teams/{team-name}/config.json` | Agent team configuration | agentview.go |
 | `~/.claude/teams/{team-name}/inboxes/{agent-name}.json` | Agent inbox messages | agentview.go |
 
@@ -54,7 +54,7 @@ All fields are optional — we handle missing/null gracefully with zero values.
 | Var | Purpose | Set by |
 |-----|---------|--------|
 | `CLAUDEBAR=1` | Detect nesting (prevent claudebar-in-claudebar) | tmux session env |
-| `CLAUDE_CODE_TASK_LIST_ID` | Tell Claude which task list to use | tmux session env |
+| `CLAUDE_CODE_TASK_LIST_ID` | Set to `claudebar-<session-name>`. Gives Claude a deterministic task list ID so the side pane knows which `~/.claude/tasks/` subdirectory to watch. Without this, each conversation gets a random UUID directory | tmux session env |
 | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` | Enable agent teams | feature toggle |
 | `MAX_THINKING_TOKENS=32000` | Set thinking token limit | feature toggle |
 | `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` | Disable background tasks | feature toggle |
