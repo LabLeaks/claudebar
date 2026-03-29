@@ -14,6 +14,9 @@ Unclassified items. Promote to a sprint when ready to work on them.
 - [ ] Show plan name in status bar (blocked — not available from statusline API yet, monitor for changes)
 - [ ] Search/filter in task viewer
 - [ ] Show active feature toggles in status bar (e.g. "TEAMS" indicator)
+- [ ] `claudebar gc` command to clean up stale state files from dead sessions
+- [ ] Show unclaimed sessions alongside live tmux sessions in the multi-session picker (currently separate paths)
+- [ ] Test whether `claude --resume <id>` works with extra flags (--model, etc.) — if so, allow extra args on resume path
 
 ## Research
 
