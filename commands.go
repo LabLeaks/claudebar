@@ -82,6 +82,7 @@ func runDefault() {
 		os.Exit(1)
 	}
 
+	dir, _ := os.Getwd()
 	matching, _ := listSessions()
 
 	if len(matching) == 1 && len(claudeFlags()) == 0 {
@@ -92,7 +93,6 @@ func runDefault() {
 
 	if len(matching) > 1 && len(claudeFlags()) == 0 {
 		// Multiple sessions for this dir — show picker (cwd sessions only)
-		dir, _ := os.Getwd()
 		dirName := filepath.Base(dir)
 		m := newPicker(matching, nil, dirName)
 		p := tea.NewProgram(m)
@@ -114,7 +114,33 @@ func runDefault() {
 		return
 	}
 
-	// No matching sessions, or flags specified — start fresh
+	// No matching sessions — check for unclaimed claude sessions to resume
+	if len(claudeFlags()) == 0 {
+		unclaimed := findUnclaimedSessions(dir)
+		if len(unclaimed) > 0 {
+			dirName := filepath.Base(dir)
+			m := newPickerWithResume(unclaimed, dirName)
+			p := tea.NewProgram(m)
+			finalModel, err := p.Run()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
+				os.Exit(1)
+			}
+			result := finalModel.(pickerModel).result
+			if result == nil {
+				return
+			}
+			switch result.action {
+			case "resume":
+				startWithResume(result.session)
+			case "new":
+				startNew(claudeFlags())
+			}
+			return
+		}
+	}
+
+	// No matching sessions, no unclaimed sessions, or flags specified — start fresh
 	startNew(claudeFlags())
 }
 
@@ -152,12 +178,25 @@ func runSessions() {
 	switch result.action {
 	case "attach":
 		tmuxExec("attach-session", "-t", result.session)
+	case "resume":
+		startWithResume(result.session)
 	case "new":
 		startNew(claudeFlags())
 	}
 }
 
 func startNew(extraArgs []string) {
+	startSession("", extraArgs)
+}
+
+func startWithResume(sessionID string) {
+	startSession(sessionID, nil)
+}
+
+// startSession creates a new tmux session running claude. When resumeSessionID
+// is non-empty, claude is launched with --resume and extraArgs/CLI flag overrides
+// are not applied. When empty, it's a fresh start with extraArgs passed through.
+func startSession(resumeSessionID string, extraArgs []string) {
 	confPath, err := writeConf()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to write tmux config: %v\n", err)
@@ -178,7 +217,7 @@ func startNew(extraArgs []string) {
 		}
 	}
 
-	// Apply global config defaults for new sessions
+	// Apply global config defaults
 	cfg := loadConfig()
 	permMode := "default"
 	if cfg.PermissionMode != "" {
@@ -197,15 +236,21 @@ func startNew(extraArgs []string) {
 		}
 	}
 
-	// CLI flags override config defaults
-	for _, arg := range extraArgs {
-		if arg == "--dangerously-skip-permissions" {
-			state.PermissionMode = "bypassPermissions"
+	resume := false
+	if resumeSessionID != "" {
+		state.SessionID = resumeSessionID
+		resume = true
+	} else {
+		// CLI flags override config defaults only for fresh starts
+		for _, arg := range extraArgs {
+			if arg == "--dangerously-skip-permissions" {
+				state.PermissionMode = "bypassPermissions"
+			}
 		}
 	}
 
 	saveState(name, state)
-	claudeCmd := launchClaudeWithExtra(name, state, false, extraArgs)
+	claudeCmd := launchClaudeWithExtra(name, state, resume, extraArgs)
 
 	taskListID := taskListIDForSession(name)
 
@@ -258,11 +303,7 @@ func runUpgrade() {
 		state.WorkDir = dir
 	}
 
-	// Find latest session ID before we restart
-	sessionID := findLatestClaudeSession(state.WorkDir)
-	if sessionID != "" {
-		state.SessionID = sessionID
-	}
+	state.SessionID = resolveSessionID(state)
 	saveState(sess, state)
 
 	// Run npm upgrade, then restart claude with resume

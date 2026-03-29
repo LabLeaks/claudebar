@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // claudeSessionState tracks the current claude session for restart+resume operations
@@ -225,8 +226,9 @@ func toggleBypassPermissions(current string) string {
 }
 
 // findLatestClaudeSession tries to extract the session ID from claude's output
-// by reading the session file that claude writes
-func findLatestClaudeSession(workDir string) string {
+// by reading the session file that claude writes. The skip set allows callers
+// to exclude session IDs that are already claimed by other claudebar instances.
+func findLatestClaudeSession(workDir string, skip map[string]bool) string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
@@ -247,25 +249,165 @@ func findLatestClaudeSession(workDir string) string {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
 			continue
 		}
+		id := strings.TrimSuffix(e.Name(), ".jsonl")
+		if skip[id] {
+			continue
+		}
 		info, err := e.Info()
 		if err != nil {
 			continue
 		}
 		if info.ModTime().Unix() > latestTime {
 			latestTime = info.ModTime().Unix()
-			latest = strings.TrimSuffix(e.Name(), ".jsonl")
+			latest = id
 		}
 	}
 	return latest
 }
 
+// liveTmuxSessionsFunc is the function used to get live tmux sessions.
+// Overridden in tests to avoid needing a real tmux server.
+var liveTmuxSessionsFunc = liveTmuxSessions
+
+// liveTmuxSessions returns the set of tmux session names on the claudebar socket.
+func liveTmuxSessions() map[string]bool {
+	live := make(map[string]bool)
+	out, err := tmuxOutput("list-sessions", "-F", "#{session_name}")
+	if err != nil {
+		return live
+	}
+	for _, line := range strings.Split(out, "\n") {
+		name := strings.TrimSpace(line)
+		if name != "" {
+			live[name] = true
+		}
+	}
+	return live
+}
+
+// claimedSessionIDs scans all state files and returns the set of session IDs
+// that are already associated with a live claudebar tmux session. State files
+// for dead tmux sessions are ignored to avoid permanently blocking session IDs.
+func claimedSessionIDs() map[string]bool {
+	claimed := make(map[string]bool)
+	live := liveTmuxSessionsFunc()
+	entries, err := os.ReadDir(stateDir())
+	if err != nil {
+		return claimed
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".state.json") {
+			continue
+		}
+		// Only count a state file as "claimed" if its tmux session still exists
+		name := strings.TrimSuffix(e.Name(), ".state.json")
+		if !live[name] {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(stateDir(), e.Name()))
+		if err != nil {
+			continue
+		}
+		var s claudeSessionState
+		if err := json.Unmarshal(data, &s); err != nil {
+			continue
+		}
+		if s.SessionID != "" {
+			claimed[s.SessionID] = true
+		}
+	}
+	return claimed
+}
+
+// claudeSessionExists checks if a .jsonl transcript file exists for the given
+// session ID in the project directory.
+func claudeSessionExists(workDir, sessionID string) bool {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	encoded := strings.ReplaceAll(workDir, "/", "-")
+	path := filepath.Join(home, ".claude", "projects", encoded, sessionID+".jsonl")
+	_, err = os.Stat(path)
+	return err == nil
+}
+
+// findUnclaimedSessions finds .jsonl transcript files for workDir that are NOT
+// claimed by any existing claudebar state file. Returns sorted by mtime, most
+// recent first.
+func findUnclaimedSessions(workDir string) []sessionInfo {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+
+	encoded := strings.ReplaceAll(workDir, "/", "-")
+	projectDir := filepath.Join(home, ".claude", "projects", encoded)
+
+	entries, err := os.ReadDir(projectDir)
+	if err != nil {
+		return nil
+	}
+
+	claimed := claimedSessionIDs()
+
+	type candidate struct {
+		id    string
+		mtime int64
+	}
+	var candidates []candidate
+
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
+			continue
+		}
+		id := strings.TrimSuffix(e.Name(), ".jsonl")
+		if claimed[id] {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		candidates = append(candidates, candidate{id: id, mtime: info.ModTime().Unix()})
+	}
+
+	// Sort by mtime descending (most recent first)
+	for i := 0; i < len(candidates); i++ {
+		for j := i + 1; j < len(candidates); j++ {
+			if candidates[j].mtime > candidates[i].mtime {
+				candidates[i], candidates[j] = candidates[j], candidates[i]
+			}
+		}
+	}
+
+	var result []sessionInfo
+	for _, c := range candidates {
+		result = append(result, sessionInfo{
+			Name: c.id,
+			Ago:  timeAgo(time.Unix(c.mtime, 0)),
+		})
+	}
+	return result
+}
+
+// resolveSessionID ensures state has a valid session ID. If the current ID is
+// empty or its .jsonl is gone, it scans for the latest unclaimed session.
+func resolveSessionID(state *claudeSessionState) string {
+	if state.SessionID != "" && claudeSessionExists(state.WorkDir, state.SessionID) {
+		return state.SessionID
+	}
+	skip := claimedSessionIDs()
+	found := findLatestClaudeSession(state.WorkDir, skip)
+	if found != "" {
+		return found
+	}
+	return state.SessionID
+}
+
 // restartClaudeWithResume kills current claude and relaunches with --resume
 func restartClaudeWithResume(tmuxSession string, state *claudeSessionState) error {
-	// Find the latest session ID from claude's session storage
-	sessionID := findLatestClaudeSession(state.WorkDir)
-	if sessionID != "" {
-		state.SessionID = sessionID
-	}
+	state.SessionID = resolveSessionID(state)
 
 	// Save updated state
 	if err := saveState(tmuxSession, state); err != nil {

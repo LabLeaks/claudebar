@@ -10,8 +10,8 @@ import (
 
 // pickerResult is what the TUI returns after the user makes a choice
 type pickerResult struct {
-	action  string // "attach" or "new"
-	session string // session name (if attach)
+	action  string // "attach", "new", or "resume"
+	session string // session name or session ID (if attach/resume)
 }
 
 type pickerModel struct {
@@ -28,6 +28,7 @@ type pickerItem struct {
 	label     string
 	session   string // empty for "new session" item
 	isNew     bool
+	isResume  bool
 	isHeader  bool
 	dimDetail string
 }
@@ -81,6 +82,46 @@ func newPicker(matching, others []sessionInfo, dirName string) pickerModel {
 	}
 }
 
+func newPickerWithResume(unclaimed []sessionInfo, dirName string) pickerModel {
+	var items []pickerItem
+
+	items = append(items, pickerItem{isHeader: true, label: fmt.Sprintf("Resume in claudebar (%s)", dirName)})
+	for _, s := range unclaimed {
+		// Show a truncated session ID for readability
+		label := s.Name
+		if len(label) > 36 {
+			label = label[:36] + "…"
+		}
+		items = append(items, pickerItem{
+			label:     label,
+			session:   s.Name,
+			isResume:  true,
+			dimDetail: s.Ago,
+		})
+	}
+
+	items = append(items, pickerItem{isHeader: true, label: ""}) // spacer
+	items = append(items, pickerItem{
+		label: "New session",
+		isNew: true,
+	})
+
+	// Set cursor to first selectable item
+	cursor := 0
+	for i, item := range items {
+		if !item.isHeader {
+			cursor = i
+			break
+		}
+	}
+
+	return pickerModel{
+		items:   items,
+		cursor:  cursor,
+		dirName: dirName,
+	}
+}
+
 func (m pickerModel) Init() tea.Cmd {
 	return nil
 }
@@ -103,6 +144,8 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			item := m.items[m.cursor]
 			if item.isNew {
 				m.result = &pickerResult{action: "new"}
+			} else if item.isResume {
+				m.result = &pickerResult{action: "resume", session: item.session}
 			} else {
 				m.result = &pickerResult{action: "attach", session: item.session}
 			}
