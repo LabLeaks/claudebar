@@ -17,6 +17,18 @@ Sprint execution uses parallel Claude subagents with these roles:
 
 Typical flow: Architect → Developer (+ Researcher/UX as needed) → Code Reviewer + Test Engineer in parallel → QA Tester → Docs Maintainer.
 
+## Patterns
+
+Codified conventions in `_project/patterns/`. Read before writing code:
+
+- `error-handling.md` — when to check vs discard errors
+- `tmux-conventions.md` — socket, session names, keybinds, helpers
+- `session-management.md` — state vs config, claimed/unclaimed, startup flow
+- `tui-style.md` — color palette, hint bars, quit keys, empty states
+- `claude-code-api.md` — undocumented API surface inventory (regression test manifest)
+- `testing.md` — what to test, isolation, naming
+- `file-organization.md` — what goes where and why
+
 ## Architecture
 
 - Dedicated tmux socket (`-L claudebar`). All keybinds/menu items call `claudebar _<command>` via `run-shell`.
