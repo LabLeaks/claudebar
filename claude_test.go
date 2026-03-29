@@ -299,9 +299,8 @@ func TestBuildClaudeArgsIncludesSettings(t *testing.T) {
 func TestClaimedSessionIDs_Empty(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
-	// stateDir uses os.UserConfigDir which on macOS returns ~/Library/Application Support
-	// On test: create the claudebar dir manually
-	configBase := filepath.Join(tmp, "Library", "Application Support", "claudebar")
+	// stateDir uses ~/.config/claudebar (via configDir)
+	configBase := filepath.Join(tmp, ".config", "claudebar")
 	os.MkdirAll(configBase, 0755)
 
 	claimed := claimedSessionIDs()
@@ -317,7 +316,7 @@ func TestClaimedSessionIDs_ReturnsSessionIDs(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
 	setLiveSessions(t, "project-a", "project-b")
-	configBase := filepath.Join(tmp, "Library", "Application Support", "claudebar")
+	configBase := filepath.Join(tmp, ".config", "claudebar")
 	os.MkdirAll(configBase, 0755)
 
 	// Write state files with session IDs
@@ -347,7 +346,7 @@ func TestClaimedSessionIDs_SkipsEmptySessionID(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
 	setLiveSessions(t, "has-id", "no-id")
-	configBase := filepath.Join(tmp, "Library", "Application Support", "claudebar")
+	configBase := filepath.Join(tmp, ".config", "claudebar")
 	os.MkdirAll(configBase, 0755)
 
 	writeStateFile(t, configBase, "has-id.state.json", &claudeSessionState{
@@ -374,7 +373,7 @@ func TestClaimedSessionIDs_HandlesCorruptStateFiles(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
 	setLiveSessions(t, "good", "corrupt")
-	configBase := filepath.Join(tmp, "Library", "Application Support", "claudebar")
+	configBase := filepath.Join(tmp, ".config", "claudebar")
 	os.MkdirAll(configBase, 0755)
 
 	// Valid state file
@@ -462,7 +461,7 @@ func TestFindUnclaimedSessions_ReturnsUnclaimed(t *testing.T) {
 	os.WriteFile(filepath.Join(projectDir, "unclaimed-3.jsonl"), []byte("{}"), 0644)
 
 	// Claim 2 of them via state files
-	configBase := filepath.Join(tmp, "Library", "Application Support", "claudebar")
+	configBase := filepath.Join(tmp, ".config", "claudebar")
 	os.MkdirAll(configBase, 0755)
 	writeStateFile(t, configBase, "tmux-a.state.json", &claudeSessionState{
 		SessionID: "claimed-1",
@@ -497,7 +496,7 @@ func TestFindUnclaimedSessions_EmptyWhenAllClaimed(t *testing.T) {
 
 	os.WriteFile(filepath.Join(projectDir, "only-session.jsonl"), []byte("{}"), 0644)
 
-	configBase := filepath.Join(tmp, "Library", "Application Support", "claudebar")
+	configBase := filepath.Join(tmp, ".config", "claudebar")
 	os.MkdirAll(configBase, 0755)
 	writeStateFile(t, configBase, "tmux-x.state.json", &claudeSessionState{
 		SessionID: "only-session",
@@ -534,7 +533,7 @@ func TestFindUnclaimedSessions_SortedByMtime(t *testing.T) {
 	os.MkdirAll(projectDir, 0755)
 
 	// Also need an empty state dir so claimedSessionIDs doesn't fail
-	configBase := filepath.Join(tmp, "Library", "Application Support", "claudebar")
+	configBase := filepath.Join(tmp, ".config", "claudebar")
 	os.MkdirAll(configBase, 0755)
 
 	// Create files with different mtimes (older first)
@@ -589,7 +588,7 @@ func TestResolveSessionID_PreservesValidSessionID(t *testing.T) {
 	os.Chtimes(filepath.Join(projectDir, "newer-session.jsonl"), now, now)
 
 	// Need empty state dir so claimedSessionIDs doesn't fail
-	configBase := filepath.Join(tmp, "Library", "Application Support", "claudebar")
+	configBase := filepath.Join(tmp, ".config", "claudebar")
 	os.MkdirAll(configBase, 0755)
 
 	state := &claudeSessionState{
@@ -619,7 +618,7 @@ func TestResolveSessionID_ScansWhenEmpty(t *testing.T) {
 	os.WriteFile(filepath.Join(projectDir, "found-session.jsonl"), []byte("{}"), 0644)
 
 	// Need empty state dir so claimedSessionIDs doesn't fail
-	configBase := filepath.Join(tmp, "Library", "Application Support", "claudebar")
+	configBase := filepath.Join(tmp, ".config", "claudebar")
 	os.MkdirAll(configBase, 0755)
 
 	state := &claudeSessionState{
@@ -650,7 +649,7 @@ func TestResolveSessionID_ScansWhenJsonlGone(t *testing.T) {
 	os.WriteFile(filepath.Join(projectDir, "fallback-session.jsonl"), []byte("{}"), 0644)
 
 	// Need empty state dir so claimedSessionIDs doesn't fail
-	configBase := filepath.Join(tmp, "Library", "Application Support", "claudebar")
+	configBase := filepath.Join(tmp, ".config", "claudebar")
 	os.MkdirAll(configBase, 0755)
 
 	state := &claudeSessionState{
@@ -698,7 +697,7 @@ func TestLoadState_CorruptFile(t *testing.T) {
 	t.Setenv("HOME", tmp)
 
 	// Create the state directory where loadState will look
-	configBase := filepath.Join(tmp, "Library", "Application Support", "claudebar")
+	configBase := filepath.Join(tmp, ".config", "claudebar")
 	os.MkdirAll(configBase, 0755)
 
 	// Write a corrupt state file

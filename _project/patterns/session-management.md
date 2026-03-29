@@ -2,7 +2,7 @@
 
 ## State vs config
 
-- **State** (`~/.config/claudebar/<session>.state.json`) — per-session, tracks current session ID, permission mode, features, working directory. Ephemeral — lost state is recoverable by toggling features again.
+- **State** (`~/.config/claudebar/<session>.state.json`) — per-session, tracks current session ID, permission mode, features, working directory. Ephemeral — lost state is recoverable by toggling features again. Previously stored in `os.UserConfigDir()` (`~/Library/Application Support/claudebar/` on macOS); migrated to `~/.config/claudebar/` in v0.2.0.
 - **Config** (`~/.config/claudebar/config.json`) — global defaults applied to all new sessions. Persists user preferences across sessions.
 
 ## Session ID tracking

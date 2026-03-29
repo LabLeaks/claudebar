@@ -82,7 +82,50 @@ func configDir() string {
 	}
 	d := filepath.Join(home, ".config", "claudebar")
 	os.MkdirAll(d, 0755)
+
+	// One-time migration: state files used to live in os.UserConfigDir()
+	// (~/Library/Application Support/claudebar on macOS). Move them to ~/.config/claudebar.
+	migrateStateDir(home, d)
+
 	return d
+}
+
+var migrateStateDone bool
+
+func migrateStateDir(home, dst string) {
+	if migrateStateDone {
+		return
+	}
+	migrateStateDone = true
+
+	// os.UserConfigDir on macOS = ~/Library/Application Support
+	old := filepath.Join(home, "Library", "Application Support", "claudebar")
+	if old == dst {
+		return // same location, nothing to migrate
+	}
+	entries, err := os.ReadDir(old)
+	if err != nil {
+		return // old dir doesn't exist, nothing to migrate
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		src := filepath.Join(old, e.Name())
+		dest := filepath.Join(dst, e.Name())
+		if _, err := os.Stat(dest); err == nil {
+			continue // already exists in new location, don't overwrite
+		}
+		data, err := os.ReadFile(src)
+		if err != nil {
+			continue
+		}
+		if os.WriteFile(dest, data, 0644) == nil {
+			os.Remove(src) // clean up old file
+		}
+	}
+	// Remove old directory if empty
+	os.Remove(old)
 }
 
 func configFile() string {
@@ -110,13 +153,7 @@ func saveConfig(cfg *globalConfig) error {
 }
 
 func stateDir() string {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		dir = os.TempDir()
-	}
-	d := filepath.Join(dir, "claudebar")
-	os.MkdirAll(d, 0755)
-	return d
+	return configDir()
 }
 
 func stateFile(tmuxSession string) string {

@@ -178,7 +178,7 @@ var (
 	activeStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#00d4ff")).Bold(true)
 	dimStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#555555"))
 	newStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#00ff88"))
-	hintStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")).MarginTop(1)
+	hintStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#777777")).MarginTop(1)
 )
 
 func (m pickerModel) View() tea.View {
