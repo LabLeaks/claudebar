@@ -15,6 +15,7 @@ Unclassified items. Promote to a sprint when ready to work on them.
 - [ ] Search/filter in task viewer
 - [ ] Show active feature toggles in status bar (e.g. "TEAMS" indicator)
 - [ ] Task list ID collision — `taskListIDForSession` uses `filepath.Base(cwd)` so two directories named `claudebar` share tasks. Should use full path encoding like session transcripts do. Needs migration of existing task lists (claudebar-commercebox, claudebar-lableaks, etc have live tasks). Do this when no sessions are running.
+- [ ] Remove `migrateStateDir` code after v0.2.0 ships (one-time migration from ~/Library/Application Support/claudebar/ to ~/.config/claudebar/)
 - [ ] `claudebar gc` command to clean up stale state files from dead sessions
 - [ ] Show unclaimed sessions alongside live tmux sessions in the multi-session picker (currently separate paths)
 - [ ] Test whether `claude --resume <id>` works with extra flags (--model, etc.) — if so, allow extra args on resume path
