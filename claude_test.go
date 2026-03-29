@@ -689,6 +689,34 @@ func writeStateFile(t *testing.T, dir, filename string, state *claudeSessionStat
 	}
 }
 
+// TestLoadState_CorruptFile verifies that loadState returns a default state
+// (PermissionMode "default") when the state file contains invalid JSON.
+// Corrupt state files can happen from partial writes during restarts or
+// system crashes — this must not bring down claudebar.
+func TestLoadState_CorruptFile(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	// Create the state directory where loadState will look
+	configBase := filepath.Join(tmp, "Library", "Application Support", "claudebar")
+	os.MkdirAll(configBase, 0755)
+
+	// Write a corrupt state file
+	os.WriteFile(filepath.Join(configBase, "corrupt-session.state.json"),
+		[]byte("this is not valid json at all {{{!@#$"), 0644)
+
+	state := loadState("corrupt-session")
+	if state == nil {
+		t.Fatal("loadState should return non-nil state for corrupt file")
+	}
+	if state.PermissionMode != "default" {
+		t.Errorf("PermissionMode: got %q, want %q", state.PermissionMode, "default")
+	}
+	if state.SessionID != "" {
+		t.Errorf("SessionID should be empty for corrupt file, got %q", state.SessionID)
+	}
+}
+
 func contains(slice []string, s string) bool {
 	for _, v := range slice {
 		if v == s {

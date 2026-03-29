@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -275,14 +274,6 @@ type editorDoneMsg struct {
 	err error
 }
 
-func editorCmd(file string) *exec.Cmd {
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		editor = "vi"
-	}
-	return exec.Command(editor, file)
-}
-
 var (
 	taskTitleStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#00d4ff")).Bold(true)
 	taskDimStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#555555"))
@@ -340,7 +331,7 @@ func (m taskModel) viewList() string {
 	b.WriteString(taskDimStyle.Render("─────────────────────────────") + "\n")
 
 	if len(m.tasks) == 0 {
-		b.WriteString(taskDimStyle.Render("  (no tasks)") + "\n")
+		b.WriteString(taskDimStyle.Render("  (no tasks — Claude creates these during work)") + "\n")
 	} else {
 		// Count stats
 		var done, active int
@@ -451,9 +442,15 @@ func wrapText(s string, width int) []string {
 }
 
 func truncate(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
 	runes := []rune(s)
 	if len(runes) <= max {
 		return s
+	}
+	if max == 1 {
+		return "…"
 	}
 	return string(runes[:max-1]) + "…"
 }

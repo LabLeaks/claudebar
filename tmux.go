@@ -61,6 +61,19 @@ func tmuxOutput(args ...string) (string, error) {
 	return strings.TrimSpace(string(out)), err
 }
 
+func editorCmd(file string) *exec.Cmd {
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vi"
+	}
+	return exec.Command(editor, file)
+}
+
+func currentSession() string {
+	sess, _ := tmuxOutput("display-message", "-p", "#{session_name}")
+	return strings.TrimSpace(sess)
+}
+
 func selfPath() string {
 	p, err := os.Executable()
 	if err != nil {
@@ -74,7 +87,12 @@ func sessionName() string {
 	if err != nil {
 		return sessionPrefix
 	}
-	return filepath.Base(dir)
+	name := filepath.Base(dir)
+	// Sanitize characters that tmux interprets specially in session names:
+	// dots (session.window parsing) and colons (session:window parsing)
+	name = strings.ReplaceAll(name, ".", "-")
+	name = strings.ReplaceAll(name, ":", "-")
+	return name
 }
 
 func isInsideClaudebar() bool {
@@ -91,8 +109,8 @@ func saveMainPaneID(sessionName, paneID string) {
 
 func mainPaneAlive() bool {
 	// Read session name from tmux
-	sess, err := tmuxOutput("display-message", "-p", "#{session_name}")
-	if err != nil || sess == "" {
+	sess := currentSession()
+	if sess == "" {
 		return false
 	}
 	data, err := os.ReadFile(mainPaneFile(sess))

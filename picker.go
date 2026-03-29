@@ -15,8 +15,6 @@ type pickerResult struct {
 }
 
 type pickerModel struct {
-	matching []sessionInfo
-	others   []sessionInfo
 	items    []pickerItem // flattened list of selectable items
 	cursor   int
 	dirName  string
@@ -74,11 +72,9 @@ func newPicker(matching, others []sessionInfo, dirName string) pickerModel {
 	}
 
 	return pickerModel{
-		matching: matching,
-		others:   others,
-		items:    items,
-		cursor:   cursor,
-		dirName:  dirName,
+		items:   items,
+		cursor:  cursor,
+		dirName: dirName,
 	}
 }
 

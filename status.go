@@ -15,7 +15,7 @@ func runStatus() {
 	}
 
 	// Show usage from cached statusline data
-	sess, _ := tmuxOutput("display-message", "-p", "#{session_name}")
+	sess := currentSession()
 	usage := loadCachedUsage(sess)
 	if usage == nil || (usage.FiveHourPct == 0 && usage.FiveHourReset == 0) {
 		// No rate limit data yet (arrives after first API response with usage info)

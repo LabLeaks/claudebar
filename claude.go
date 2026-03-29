@@ -123,11 +123,11 @@ func stateFile(tmuxSession string) string {
 	return filepath.Join(stateDir(), tmuxSession+".state.json")
 }
 
-func loadState(tmuxSession string) (*claudeSessionState, error) {
+func loadState(tmuxSession string) *claudeSessionState {
 	path := stateFile(tmuxSession)
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return &claudeSessionState{PermissionMode: "default"}, nil
+		return &claudeSessionState{PermissionMode: "default"}
 	}
 	var s claudeSessionState
 	if err := json.Unmarshal(data, &s); err != nil {
@@ -136,9 +136,9 @@ func loadState(tmuxSession string) (*claudeSessionState, error) {
 			snippet = snippet[:200] + "..."
 		}
 		fmt.Fprintf(os.Stderr, "claudebar: corrupt state file %s: %v\nContent: %s\n", path, err, snippet)
-		return &claudeSessionState{PermissionMode: "default"}, nil
+		return &claudeSessionState{PermissionMode: "default"}
 	}
-	return &s, nil
+	return &s
 }
 
 func saveState(tmuxSession string, s *claudeSessionState) error {

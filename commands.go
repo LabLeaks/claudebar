@@ -41,7 +41,7 @@ func listSessions() (matching []sessionInfo, others []sessionInfo) {
 		info := sessionInfo{Name: name, Ago: ago}
 
 		// Match by WorkDir from saved state, not by session name
-		state, _ := loadState(name)
+		state := loadState(name)
 		if state.WorkDir == dir {
 			matching = append(matching, info)
 		} else {
@@ -77,6 +77,11 @@ func claudeFlags() []string {
 
 // runDefault: attach to existing session for this cwd, or start a new one
 func runDefault() {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		fmt.Fprintln(os.Stderr, "claudebar requires tmux — install with: brew install tmux")
+		os.Exit(1)
+	}
+
 	if isInsideClaudebar() {
 		fmt.Println("Already inside claudebar. Use ⌥H for shortcuts.")
 		os.Exit(1)
@@ -146,6 +151,11 @@ func runDefault() {
 
 // runSessions: show all claudebar sessions across all projects
 func runSessions() {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		fmt.Fprintln(os.Stderr, "claudebar requires tmux — install with: brew install tmux")
+		os.Exit(1)
+	}
+
 	if isInsideClaudebar() {
 		fmt.Println("Already inside claudebar. Use ⌥H for shortcuts.")
 		os.Exit(1)
@@ -197,6 +207,11 @@ func startWithResume(sessionID string) {
 // is non-empty, claude is launched with --resume and extraArgs/CLI flag overrides
 // are not applied. When empty, it's a fresh start with extraArgs passed through.
 func startSession(resumeSessionID string, extraArgs []string) {
+	if _, err := exec.LookPath("claude"); err != nil {
+		fmt.Fprintln(os.Stderr, "claudebar requires claude — install with: npm install -g @anthropic-ai/claude-code")
+		os.Exit(1)
+	}
+
 	confPath, err := writeConf()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to write tmux config: %v\n", err)
@@ -295,9 +310,9 @@ func runDetach() {
 }
 
 func runUpgrade() {
-	sess, _ := tmuxOutput("display-message", "-p", "#{session_name}")
+	sess := currentSession()
 
-	state, _ := loadState(sess)
+	state := loadState(sess)
 	if state.WorkDir == "" {
 		dir, _ := os.Getwd()
 		state.WorkDir = dir
@@ -325,8 +340,8 @@ func runUpgrade() {
 }
 
 func runPerms() {
-	sess, _ := tmuxOutput("display-message", "-p", "#{session_name}")
-	state, _ := loadState(sess)
+	sess := currentSession()
+	state := loadState(sess)
 	if state.WorkDir == "" {
 		dir, _ := os.Getwd()
 		state.WorkDir = dir
@@ -344,8 +359,8 @@ func runPerms() {
 }
 
 func runToggleRC() {
-	sess, _ := tmuxOutput("display-message", "-p", "#{session_name}")
-	state, _ := loadState(sess)
+	sess := currentSession()
+	state := loadState(sess)
 	if state.WorkDir == "" {
 		dir, _ := os.Getwd()
 		state.WorkDir = dir
@@ -381,7 +396,7 @@ func togglePane(optionName, cmd, direction, size string) {
 }
 
 func runTasks() {
-	sess, _ := tmuxOutput("display-message", "-p", "#{session_name}")
+	sess := currentSession()
 	taskListID := taskListIDForSession(sess)
 	self := selfPath()
 	taskCmd := fmt.Sprintf("CLAUDEBAR_TASK_LIST_ID=%s %s _taskview",
@@ -390,8 +405,8 @@ func runTasks() {
 }
 
 func runAgents() {
-	sess, _ := tmuxOutput("display-message", "-p", "#{session_name}")
-	state, _ := loadState(sess)
+	sess := currentSession()
+	state := loadState(sess)
 
 	// Check if agent teams are enabled
 	if !state.isFeatureOn("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS") {
@@ -438,8 +453,8 @@ func cycleFeature(sessionOn, configOn bool) (bool, bool) {
 
 func runFeatures() {
 	self := selfPath()
-	sess, _ := tmuxOutput("display-message", "-p", "#{session_name}")
-	state, _ := loadState(sess)
+	sess := currentSession()
+	state := loadState(sess)
 	cfg := loadConfig()
 
 	var menuArgs []string
@@ -475,8 +490,8 @@ func runFeatures() {
 }
 
 func runToggleFeature(envVar string) {
-	sess, _ := tmuxOutput("display-message", "-p", "#{session_name}")
-	state, _ := loadState(sess)
+	sess := currentSession()
+	state := loadState(sess)
 	if state.WorkDir == "" {
 		dir, _ := os.Getwd()
 		state.WorkDir = dir
@@ -549,13 +564,13 @@ func runToggleFeature(envVar string) {
 	var sessionChanged bool
 	switch envVar {
 	case "bypass_permissions":
-		old, _ := loadState(sess)
+		old := loadState(sess)
 		sessionChanged = (old.PermissionMode != state.PermissionMode)
 	case "remote_control":
-		old, _ := loadState(sess)
+		old := loadState(sess)
 		sessionChanged = (old.RemoteControl != state.RemoteControl)
 	default:
-		old, _ := loadState(sess)
+		old := loadState(sess)
 		sessionChanged = (old.isFeatureOn(envVar) != state.isFeatureOn(envVar))
 	}
 
@@ -601,13 +616,13 @@ func runSendToPane(cmd string) {
 }
 
 func runKillSession() {
-	sess, _ := tmuxOutput("display-message", "-p", "#{session_name}")
+	sess := currentSession()
 	tmuxExec("kill-session", "-t", sess)
 }
 
 func runHelpPopup() {
 	self := selfPath()
-	tmuxExec("display-popup", "-w", "55", "-h", "16", "-T", " claudebar ",
+	tmuxExec("display-popup", "-w", "55", "-h", "24", "-T", " claudebar ",
 		fmt.Sprintf("%s help", self))
 }
 
@@ -635,6 +650,6 @@ SHORTCUTS (inside claudebar)
 
 STATUS BAR
   ⚡PEAK      Peak hours (weekdays 5-11am PT, shown in local time)
-  ○ off-peak  Outside peak hours
+  🌙 OFF-PEAK  Outside peak hours
 `)
 }

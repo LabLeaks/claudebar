@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -88,8 +87,6 @@ func listTeamsForProject(projectDir string) []string {
 		if !e.IsDir() {
 			continue
 		}
-		teamDir := filepath.Join(teamsDir, e.Name())
-
 		// Check config.json for cwd match
 		cfg, err := loadTeamConfig(e.Name())
 		if err == nil {
@@ -101,12 +98,6 @@ func listTeamsForProject(projectDir string) []string {
 				}
 			}
 			continue
-		}
-
-		// No config — check if inboxes exist (stale team)
-		if _, err := os.Stat(filepath.Join(teamDir, "inboxes")); err == nil {
-			// Can't verify project scope without config, skip
-			_ = teamDir
 		}
 	}
 	return teams
@@ -421,11 +412,7 @@ func (m agentModel) updateMemberDetail(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		// Edit team config
 		home, _ := os.UserHomeDir()
 		configPath := filepath.Join(home, ".claude", "teams", m.selectedTeam, "config.json")
-		editor := os.Getenv("EDITOR")
-		if editor == "" {
-			editor = "vi"
-		}
-		return m, tea.ExecProcess(exec.Command(editor, configPath), func(err error) tea.Msg {
+		return m, tea.ExecProcess(editorCmd(configPath), func(err error) tea.Msg {
 			return agentEditorDoneMsg{err: err}
 		})
 	case "o":
@@ -455,11 +442,7 @@ func (m agentModel) updateInboxDetail(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		if m.selectedMember != nil {
 			home, _ := os.UserHomeDir()
 			inboxPath := filepath.Join(home, ".claude", "teams", m.selectedTeam, "inboxes", m.selectedMember.Name+".json")
-			editor := os.Getenv("EDITOR")
-			if editor == "" {
-				editor = "vi"
-			}
-			return m, tea.ExecProcess(exec.Command(editor, inboxPath), func(err error) tea.Msg {
+			return m, tea.ExecProcess(editorCmd(inboxPath), func(err error) tea.Msg {
 				return agentEditorDoneMsg{err: err}
 			})
 		}
@@ -554,7 +537,7 @@ func (m agentModel) viewOverview() string {
 	b.WriteString(agentDimStyle.Render("─────────────────────────────") + "\n")
 
 	if len(m.items) == 0 {
-		b.WriteString("\n" + agentDimStyle.Render("  No active teams for this project") + "\n")
+		b.WriteString("\n" + agentDimStyle.Render("  No active teams — enable in Features menu (⌥M → ⚙)") + "\n")
 	}
 
 	for i, item := range m.items {

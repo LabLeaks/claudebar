@@ -105,8 +105,19 @@ func runStatusLine() {
 func writeStatuslineSettings(selfPath, tmuxSession string) string {
 	dir := stateDir()
 	path := filepath.Join(dir, tmuxSession+".statusline-settings.json")
-	content := fmt.Sprintf(`{"statusLine":{"type":"command","command":"%s _statusline %s"}}`, selfPath, tmuxSession)
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	settings := struct {
+		StatusLine struct {
+			Type    string `json:"type"`
+			Command string `json:"command"`
+		} `json:"statusLine"`
+	}{}
+	settings.StatusLine.Type = "command"
+	settings.StatusLine.Command = selfPath + " _statusline " + tmuxSession
+	content, err := json.Marshal(settings)
+	if err != nil {
+		return ""
+	}
+	if err := os.WriteFile(path, content, 0644); err != nil {
 		return ""
 	}
 	return path
