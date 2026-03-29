@@ -12,7 +12,7 @@
 
 ### Filesystem
 
-Use `t.TempDir()` for any test that creates files. Tests that touch real `stateDir()` or `configDir()` must override `HOME` env var to a temp directory and restore with `t.Cleanup`.
+Use `t.TempDir()` for any test that creates files. **ANY test that calls `stateDir()`, `configDir()`, `usageCacheFile()`, `writeStatuslineSettings()`, or any function that resolves paths under `~/.config/claudebar/` MUST override `HOME`.** Without this, the migration in `configDir()` runs against real files and can break running claudebar sessions. This caused a production incident where live sessions lost their state files.
 
 ```go
 tmp := t.TempDir()
