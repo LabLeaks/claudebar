@@ -5,31 +5,31 @@ Clean up tech debt so v0.2.0 ships clean. Findings from parallel audit (patterns
 ## Tasks
 
 ### Security
-- [ ] `writeStatuslineSettings` — use `json.Marshal` instead of `fmt.Sprintf` (directory names with `"` break JSON)
+- [x] `writeStatuslineSettings` — use `json.Marshal` instead of `fmt.Sprintf` (directory names with `"` break JSON)
 
 ### Bug prevention
-- [ ] `sessionName()` — sanitize dots/colons that confuse tmux session targeting (`1.0` → session 1 window 0)
-- [ ] `truncate()` — bounds check for max=0
+- [x] `sessionName()` — sanitize dots/colons that confuse tmux session targeting (`1.0` → session 1 window 0)
+- [x] `truncate()` — bounds check for max=0
 
 ### UX
-- [ ] Add tmux-installed check at startup (clear error vs raw exec failure)
-- [ ] Add claude-installed check at startup
-- [ ] Help text: `○ off-peak` → `🌙 OFF-PEAK` to match actual indicator
-- [ ] Help popup height: 16 → 24 (content gets clipped)
-- [ ] Empty state messages: "(no tasks)" and "No active teams" need context/guidance
+- [x] Add tmux-installed check at startup (clear error vs raw exec failure)
+- [x] Add claude-installed check at startup
+- [x] Help text: `○ off-peak` → `🌙 OFF-PEAK` to match actual indicator
+- [x] Help popup height: 16 → 24 (content gets clipped)
+- [x] Empty state messages: "(no tasks)" and "No active teams" need context/guidance
 
 ### Code quality
-- [ ] Drop dead error return from `loadState` (always nil, every callsite discards it)
-- [ ] Extract `currentSession()` helper (8 callsites doing same tmux query)
-- [ ] Move `editorCmd` to shared location (agentview inlines it twice instead of reusing taskview's)
-- [ ] Remove unused `matching`/`others` fields from `pickerModel`
-- [ ] Remove dead stale-team fallback block in agentview.go (lines 107-110)
+- [x] Drop dead error return from `loadState` (always nil, every callsite discards it)
+- [x] Extract `currentSession()` helper (8 callsites doing same tmux query)
+- [x] Move `editorCmd` to shared location (agentview inlines it twice instead of reusing taskview's)
+- [x] Remove unused `matching`/`others` fields from `pickerModel`
+- [x] Remove dead stale-team fallback block in agentview.go (lines 107-110)
 
 ### Tests
-- [ ] Table-driven tests for `peakInfo()` — Saturday, Sunday, Monday morning, Friday evening, weekday peak/off-peak
-- [ ] Table-driven tests for `cycleFeature()` and `featureState()`
-- [ ] Table-driven tests for `timeAgo()`
-- [ ] Test `loadState` corrupt file handling (returns default state)
+- [x] Table-driven tests for `peakInfo()` — output validation (time.Now not injectable for boundary tests)
+- [x] Table-driven tests for `cycleFeature()` and `featureState()`
+- [x] Table-driven tests for `timeAgo()`
+- [x] Test `loadState` corrupt file handling (returns default state)
 
 ## Not doing (reviewed and rejected)
 
