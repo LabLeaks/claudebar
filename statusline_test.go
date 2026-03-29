@@ -118,6 +118,7 @@ func TestCacheRoundTrip(t *testing.T) {
 }
 
 func TestUsageCacheFileIncludesSessionName(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	path := usageCacheFile("my-project")
 	if !strings.HasSuffix(path, "my-project.usage-cache.json") {
 		t.Errorf("usageCacheFile(%q) = %q, should end with my-project.usage-cache.json", "my-project", path)
@@ -125,6 +126,7 @@ func TestUsageCacheFileIncludesSessionName(t *testing.T) {
 }
 
 func TestUsageCacheFileEmptySessionDefaults(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	path := usageCacheFile("")
 	if !strings.Contains(path, "default.usage-cache.json") {
 		t.Errorf("usageCacheFile(%q) = %q, should contain 'default'", "", path)
@@ -132,6 +134,7 @@ func TestUsageCacheFileEmptySessionDefaults(t *testing.T) {
 }
 
 func TestUsageCacheFileDifferentSessions(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	path1 := usageCacheFile("project-a")
 	path2 := usageCacheFile("project-b")
 	if path1 == path2 {
@@ -140,6 +143,7 @@ func TestUsageCacheFileDifferentSessions(t *testing.T) {
 }
 
 func TestLoadCachedUsageWithSessionName(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	sessionName := "test-session-load"
 	cache := cachedUsage{
 		FiveHourPct: 55.5,
@@ -166,6 +170,7 @@ func TestLoadCachedUsageWithSessionName(t *testing.T) {
 }
 
 func TestWriteStatuslineSettingsIncludesSession(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	path := writeStatuslineSettings("/usr/local/bin/claudebar", "my-project")
 	if path == "" {
 		t.Fatal("writeStatuslineSettings returned empty path")
