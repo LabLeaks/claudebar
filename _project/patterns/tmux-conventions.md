@@ -22,6 +22,20 @@ Side panes are Bubbletea TUIs that poll every 1s. They auto-close when the main 
 
 `restartClaudeWithResume` sends C-c + C-d to gracefully stop Claude, then uses `respawn-pane -k` to atomically replace the pane content. Side panes survive because they're separate panes. The `-k` flag kills whatever is running in the target pane.
 
+## Main pane tracking
+
+Side panes need to know if the main Claude pane is still alive (to auto-close). On session creation, the main pane's tmux ID is written to `<session>.main-pane` in `stateDir()`. Side panes call `mainPaneAlive()` every 1s tick to check if that pane ID still exists in the tmux session. If not, the side pane exits.
+
+## Feature toggle cycle
+
+Features cycle through three states: `OFF → ON → ALWAYS → OFF`. Implemented by `cycleFeature(sessionOn, configOn)` in commands.go.
+
+- **OFF** — not set in session or config
+- **ON** — set in current session only; new sessions won't have it
+- **ALWAYS** — set in global config; every new session inherits it
+
+Display uses `featureState()`: `○ OFF`, `● ON`, `◉ ALWAYS`.
+
 ## Helper: currentSession()
 
 Use `currentSession()` (tmux.go) to get the current tmux session name. Don't inline `tmuxOutput("display-message", "-p", "#{session_name}")`.

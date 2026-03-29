@@ -7,7 +7,7 @@ Everything here is undocumented and may change without notice. This is the regre
 | Path | What we use it for | Where in code |
 |------|--------------------|---------------|
 | `~/.claude/projects/{encoded-dir}/{session-id}.jsonl` | Session transcripts — ID extraction, claimed/unclaimed detection | claude.go |
-| `~/.claude/tasks/{list-id}/{task-id}.json` | Task list data for side pane | taskview.go |
+| `~/.claude/tasks/{list-id}/{task-id}.json` | Task list data for side pane. List ID = `claudebar-<session-name>` | taskview.go |
 | `~/.claude/teams/{team-name}/config.json` | Agent team configuration | agentview.go |
 | `~/.claude/teams/{team-name}/inboxes/{agent-name}.json` | Agent inbox messages | agentview.go |
 
