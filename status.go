@@ -14,8 +14,14 @@ func runStatus() {
 		fmt.Printf("#[fg=#00ff88]🌙 OFF-PEAK#[fg=#888888] (til %s)", localStart)
 	}
 
-	// Show usage from cached statusline data
+	// Show active router if set
 	sess := currentSession()
+	state := loadState(sess)
+	if state.Router != "" {
+		fmt.Printf("#[fg=#1a1a2e]  #[fg=#b388ff,bold]⚡ %s", state.Router)
+	}
+
+	// Show usage from cached statusline data
 	usage := loadCachedUsage(sess)
 	if usage == nil || (usage.FiveHourPct == 0 && usage.FiveHourReset == 0) {
 		// No rate limit data yet (arrives after first API response with usage info)

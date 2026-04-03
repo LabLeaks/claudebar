@@ -18,6 +18,7 @@ type claudeSessionState struct {
 	Model          string            `json:"model"`
 	WorkDir        string            `json:"work_dir"`
 	Features       map[string]bool   `json:"features,omitempty"` // toggleable env var features
+	Router         string            `json:"router,omitempty"`   // active router config name
 }
 
 type feature struct {
@@ -69,10 +70,12 @@ func (s *claudeSessionState) featureEnvVars() []string {
 
 // globalConfig holds user preferences that apply to all new sessions
 type globalConfig struct {
-	PermissionMode string          `json:"permission_mode,omitempty"` // default permission mode for new sessions
-	RemoteControl  bool            `json:"remote_control,omitempty"`  // enable --remote-control by default
-	Features       map[string]bool `json:"features,omitempty"`        // features enabled by default
-	Model          string          `json:"model,omitempty"`           // default model
+	PermissionMode string                   `json:"permission_mode,omitempty"` // default permission mode for new sessions
+	RemoteControl  bool                     `json:"remote_control,omitempty"`  // enable --remote-control by default
+	Features       map[string]bool          `json:"features,omitempty"`        // features enabled by default
+	Model          string                   `json:"model,omitempty"`           // default model
+	Router         string                   `json:"router,omitempty"`          // default router config (ALWAYS)
+	RouterConfigs  map[string]*routerConfig `json:"router_configs,omitempty"`  // named router configurations
 }
 
 func configDir() string {
@@ -149,7 +152,11 @@ func saveConfig(cfg *globalConfig) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(configFile(), data, 0644)
+	perm := os.FileMode(0644)
+	if len(cfg.RouterConfigs) > 0 {
+		perm = 0600 // API keys in router configs
+	}
+	return os.WriteFile(configFile(), data, perm)
 }
 
 func stateDir() string {
@@ -458,6 +465,9 @@ func restartClaudeWithResume(tmuxSession string, state *claudeSessionState) erro
 	// Build command with env vars prepended
 	envPrefix := ""
 	for _, env := range state.featureEnvVars() {
+		envPrefix += env + " "
+	}
+	for _, env := range routerEnvVars(state.Router) {
 		envPrefix += env + " "
 	}
 	cmd := envPrefix + launchClaude(tmuxSession, state, true)

@@ -85,6 +85,7 @@ CCR handles model routing internally via its Router slots — we don't set `ANTH
 - **Context window**: Claude Code expects 200k+ for compaction. Shorter-window models may hit issues.
 - **Feature degradation**: Extended thinking, vision, web search are model-dependent.
 - **Prompt caching**: Anthropic-only. CCR's cleancache transformer strips these fields.
+- **Config changes require deactivate+reactivate.** CCR config is only generated when CCR is not running. Editing `router_configs` while CCR is live has no effect until all routed sessions deactivate (stopping CCR) and a session reactivates (regenerating config and restarting CCR). A warn+restart UX is deferred to the TUI wizard (nice-to-have #14).
 
 ## Design
 
@@ -132,7 +133,7 @@ Example `config.json`:
 
 ```go
 var knownProviders = map[string]string{
-    "openrouter": "https://openrouter.ai/api/v1/chat/completions",
+    "openrouter": "https://openrouter.ai/api/v1",
 }
 ```
 
@@ -273,7 +274,8 @@ When router is active, show the config name:
 
 - `claude.go` — `Router` in session state, `Router`/`RouterConfigs` in global config
 - `commands.go` — `startSession` handles `--router` flag + CCR startup, `runFeatures` includes router section, `restartClaudeWithResume` includes router env vars
-- `main.go` — `"_toggle_router"` and `"_new_router"` cases
+- `main.go` — `"_toggle_router"` case
+- `status.go` — shows active router config name in status bar
 
 ## Tests
 
@@ -289,23 +291,23 @@ When router is active, show the config name:
 ## Task Breakdown
 
 ### Must-have
-1. `routerConfig` type, config structs, `knownProviders` registry
-2. `generateCCRConfig()` — claudebar config → CCR config.json + preset files
-3. CCR lifecycle — start (detached), stop, liveness check, dependency check
-4. `routerEnvVars()` — router name → env var list with preset URL
-5. `extractRouterFlag()` — parse `--router=` from CLI args
-6. `startSession` integration — router flag, ensure CCR running, env var injection
-7. `restartClaudeWithResume` integration — env var injection
-8. Features menu: router section with ON/ALWAYS/OFF radio-button
-9. Status bar: show active router config name
-10. `chmod 600` on config files with API keys
-11. Config reload: warn on edit while CCR running, offer restart option
-12. Session cleanup: on session exit, if last routed session, stop CCR
-13. Tests
+- [x] 1. `routerConfig` type, config structs, `knownProviders` registry
+- [x] 2. `generateCCRConfig()` — claudebar config → CCR config.json + preset files
+- [x] 3. CCR lifecycle — start (detached), stop, liveness check, dependency check
+- [x] 4. `routerEnvVars()` — router name → env var list with preset URL
+- [x] 5. `extractRouterFlag()` — parse `--router=` from CLI args
+- [x] 6. `startSession` integration — router flag, ensure CCR running, env var injection
+- [x] 7. `restartClaudeWithResume` integration — env var injection
+- [x] 8. Features menu: router section with ON/ALWAYS/OFF radio-button
+- [x] 9. Status bar: show active router config name
+- [x] 10. `chmod 600` on config files with API keys
+- [ ] 11. Config reload: warn on edit while CCR running, offer restart option — deferred to TUI wizard
+- [x] 12. Session cleanup: on session exit, if last routed session, stop CCR
+- [x] 13. Tests
 
-### Nice-to-have (defer if needed)
-14. TUI wizard for creating new router configs from menu
-15. Delete/edit router config from menu
+### Nice-to-have (deferred)
+- [ ] 14. TUI wizard for creating new router configs from menu
+- [ ] 15. Delete/edit router config from menu
 
 ## Decisions
 

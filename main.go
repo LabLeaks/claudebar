@@ -73,6 +73,10 @@ func main() {
 		if len(os.Args) > 2 {
 			runToggleFeature(os.Args[2])
 		}
+	case "_toggle_router":
+		if len(os.Args) > 2 {
+			runToggleRouter(os.Args[2])
+		}
 	case "_statusline":
 		runStatusLine()
 

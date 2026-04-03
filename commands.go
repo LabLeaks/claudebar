@@ -82,6 +82,9 @@ func runDefault() {
 		os.Exit(1)
 	}
 
+	// Clean up orphaned CCR from prior kill-session
+	cleanupOrphanedCCR()
+
 	if isInsideClaudebar() {
 		fmt.Println("Already inside claudebar. Use ⌥H for shortcuts.")
 		os.Exit(1)
@@ -251,6 +254,41 @@ func startSession(resumeSessionID string, extraArgs []string) {
 		}
 	}
 
+	// Extract --router flag from args before passing to claude
+	var routerFlag string
+	if len(extraArgs) > 0 {
+		routerFlag, extraArgs = extractRouterFlag(extraArgs)
+	}
+
+	// Determine active router: CLI flag > config default
+	activeRouter := ""
+	if routerFlag != "" {
+		if _, ok := cfg.RouterConfigs[routerFlag]; !ok {
+			var available []string
+			for k := range cfg.RouterConfigs {
+				available = append(available, k)
+			}
+			if len(available) == 0 {
+				fmt.Fprintf(os.Stderr, "Router config %q not found (no router configs defined)\n", routerFlag)
+			} else {
+				fmt.Fprintf(os.Stderr, "Router config %q not found (available: %s)\n", routerFlag, strings.Join(available, ", "))
+			}
+			os.Exit(1)
+		}
+		activeRouter = routerFlag
+	} else if cfg.Router != "" {
+		activeRouter = cfg.Router
+	}
+	state.Router = activeRouter
+
+	// Validate the router config before proceeding
+	if activeRouter != "" {
+		if err := validateRouterConfig(activeRouter, cfg.RouterConfigs[activeRouter]); err != nil {
+			fmt.Fprintf(os.Stderr, "Invalid router config: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
 	resume := false
 	if resumeSessionID != "" {
 		state.SessionID = resumeSessionID
@@ -261,6 +299,14 @@ func startSession(resumeSessionID string, extraArgs []string) {
 			if arg == "--dangerously-skip-permissions" {
 				state.PermissionMode = "bypassPermissions"
 			}
+		}
+	}
+
+	// If router is active, ensure CCR is running before creating the session
+	if state.Router != "" {
+		if err := ensureCCRRunning(cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "Router error: %v\n", err)
+			os.Exit(1)
 		}
 	}
 
@@ -284,6 +330,9 @@ func startSession(resumeSessionID string, extraArgs []string) {
 		"-e", "CLAUDE_CODE_TASK_LIST_ID=" + taskListID,
 	}
 	for _, env := range state.featureEnvVars() {
+		tmuxArgs = append(tmuxArgs, "-e", env)
+	}
+	for _, env := range routerEnvVars(state.Router) {
 		tmuxArgs = append(tmuxArgs, "-e", env)
 	}
 	tmuxArgs = append(tmuxArgs, claudeCmd)
@@ -485,6 +534,10 @@ func runFeatures() {
 			fmt.Sprintf("run-shell '%s _toggle %s'", self, envVar),
 		)
 	}
+
+	// Router section
+	routerArgs := routerMenuItems(self, sess, state, cfg)
+	menuArgs = append(menuArgs, routerArgs...)
 
 	tmuxExec(append([]string{"display-menu"}, menuArgs...)...)
 }

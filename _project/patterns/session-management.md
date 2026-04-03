@@ -2,8 +2,8 @@
 
 ## State vs config
 
-- **State** (`~/.config/claudebar/<session>.state.json`) — per-session, tracks current session ID, permission mode, features, working directory. Ephemeral — lost state is recoverable by toggling features again. Previously stored in `os.UserConfigDir()` (`~/Library/Application Support/claudebar/` on macOS); migrated to `~/.config/claudebar/` in v0.2.0.
-- **Config** (`~/.config/claudebar/config.json`) — global defaults applied to all new sessions. Persists user preferences across sessions.
+- **State** (`~/.config/claudebar/<session>.state.json`) — per-session, tracks current session ID, permission mode, features, working directory, and active router config name (`Router` field). Ephemeral — lost state is recoverable by toggling features again. Previously stored in `os.UserConfigDir()` (`~/Library/Application Support/claudebar/` on macOS); migrated to `~/.config/claudebar/` in v0.2.0.
+- **Config** (`~/.config/claudebar/config.json`) — global defaults applied to all new sessions. Persists user preferences across sessions. Includes `Router` (default router for ALWAYS mode) and `RouterConfigs` (named router configurations with provider, API key, model slots, and transformers).
 
 ## Session ID tracking
 
