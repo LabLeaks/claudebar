@@ -435,23 +435,28 @@ func findUnclaimedSessions(workDir string) []sessionInfo {
 	return result
 }
 
-// resolveSessionID ensures state has a valid session ID. If the current ID is
-// empty or its .jsonl is gone, it scans for the latest unclaimed session.
+// resolveSessionID returns the session ID from state. If state.SessionID is
+// empty or its .jsonl is gone, it returns empty — we don't guess by scanning
+// for "most recent" because that can jump to the wrong conversation when
+// multiple sessions exist for the same project.
 func resolveSessionID(state *claudeSessionState) string {
+	// If we have a session ID and the .jsonl exists, use it
 	if state.SessionID != "" && claudeSessionExists(state.WorkDir, state.SessionID) {
 		return state.SessionID
 	}
-	skip := claimedSessionIDs()
-	found := findLatestClaudeSession(state.WorkDir, skip)
-	if found != "" {
-		return found
-	}
-	return state.SessionID
+	// Otherwise return empty and let Claude CLI decide what to do.
+	// Don't scan for "most recent" — that heuristic jumps to the wrong
+	// conversation when multiple sessions share a project directory.
+	return ""
 }
 
 // restartClaudeWithResume kills current claude and relaunches with --resume
 func restartClaudeWithResume(tmuxSession string, state *claudeSessionState) error {
-	state.SessionID = resolveSessionID(state)
+	// Only validate, don't overwrite state.SessionID with empty
+	resolved := resolveSessionID(state)
+	if resolved != "" {
+		state.SessionID = resolved
+	}
 
 	// Save updated state
 	if err := saveState(tmuxSession, state); err != nil {

@@ -603,10 +603,11 @@ func TestResolveSessionID_PreservesValidSessionID(t *testing.T) {
 	}
 }
 
-// TestResolveSessionID_ScansWhenEmpty verifies that resolveSessionID scans for
-// the latest session when state.SessionID is empty (e.g., first restart after
-// a fresh session).
-func TestResolveSessionID_ScansWhenEmpty(t *testing.T) {
+// TestResolveSessionID_ReturnsEmptyWhenStateIsEmpty verifies that resolveSessionID
+// returns empty when state.SessionID is empty. We intentionally do NOT scan for
+// "most recent" because that heuristic jumps to the wrong conversation when
+// multiple sessions share a project directory.
+func TestResolveSessionID_ReturnsEmptyWhenStateIsEmpty(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
 
@@ -622,21 +623,21 @@ func TestResolveSessionID_ScansWhenEmpty(t *testing.T) {
 	os.MkdirAll(configBase, 0755)
 
 	state := &claudeSessionState{
-		SessionID:      "", // empty — should trigger scan
+		SessionID:      "", // empty — should NOT trigger scan
 		PermissionMode: "default",
 		WorkDir:        workDir,
 	}
 
 	got := resolveSessionID(state)
-	if got != "found-session" {
-		t.Errorf("expected SessionID to be 'found-session', got %q", got)
+	if got != "" {
+		t.Errorf("expected empty SessionID (preserve state), got %q", got)
 	}
 }
 
-// TestResolveSessionID_ScansWhenJsonlGone verifies that resolveSessionID
-// re-scans when the .jsonl for the stored session ID has been deleted
-// (e.g., user ran `claude --reset` or cleaned up old sessions).
-func TestResolveSessionID_ScansWhenJsonlGone(t *testing.T) {
+// TestResolveSessionID_ReturnsEmptyWhenJsonlGone verifies that resolveSessionID
+// returns empty when the stored session ID's .jsonl file has been deleted.
+// We intentionally do NOT scan for "most recent" — let Claude handle it.
+func TestResolveSessionID_ReturnsEmptyWhenJsonlGone(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
 
@@ -645,7 +646,7 @@ func TestResolveSessionID_ScansWhenJsonlGone(t *testing.T) {
 	projectDir := filepath.Join(tmp, ".claude", "projects", encoded)
 	os.MkdirAll(projectDir, 0755)
 
-	// Only the fallback session exists — the original was deleted
+	// Only a fallback session exists — the state's session was deleted
 	os.WriteFile(filepath.Join(projectDir, "fallback-session.jsonl"), []byte("{}"), 0644)
 
 	// Need empty state dir so claimedSessionIDs doesn't fail
@@ -659,8 +660,8 @@ func TestResolveSessionID_ScansWhenJsonlGone(t *testing.T) {
 	}
 
 	got := resolveSessionID(state)
-	if got != "fallback-session" {
-		t.Errorf("expected SessionID to be 'fallback-session', got %q", got)
+	if got != "" {
+		t.Errorf("expected empty SessionID when .jsonl gone (don't scan), got %q", got)
 	}
 }
 

@@ -367,7 +367,11 @@ func runUpgrade() {
 		state.WorkDir = dir
 	}
 
-	state.SessionID = resolveSessionID(state)
+	// Only validate, don't overwrite state.SessionID with empty
+	resolved := resolveSessionID(state)
+	if resolved != "" {
+		state.SessionID = resolved
+	}
 	saveState(sess, state)
 
 	// Run npm upgrade, then restart claude with resume

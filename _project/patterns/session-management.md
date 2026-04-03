@@ -14,10 +14,10 @@ Claude Code creates a `.jsonl` transcript per session in `~/.claude/projects/<en
 ```
 resolveSessionID(state) flow:
   1. state.SessionID set + .jsonl exists → use it (don't re-scan)
-  2. state.SessionID empty or .jsonl gone → findLatestClaudeSession(skip=claimed)
+  2. state.SessionID empty or .jsonl gone → return empty (don't scan)
 ```
 
-This prevents claudebar from accidentally resuming another instance's session or a raw Claude session during feature toggles/restarts.
+This prevents claudebar from accidentally resuming another instance's session or a raw Claude session during feature toggles/restarts. We intentionally do NOT use a "most recent .jsonl" heuristic, because that causes session jumping when multiple sessions share a project directory.
 
 ## Startup flow
 
