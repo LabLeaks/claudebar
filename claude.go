@@ -467,7 +467,7 @@ func restartClaudeWithResume(tmuxSession string, state *claudeSessionState) erro
 	for _, env := range state.featureEnvVars() {
 		envPrefix += env + " "
 	}
-	for _, env := range routerEnvVars(state.Router) {
+	for _, env := range routerEnvVars(state.Router, lookupRouterConfig(state.Router)) {
 		envPrefix += env + " "
 	}
 	cmd := envPrefix + launchClaude(tmuxSession, state, true)

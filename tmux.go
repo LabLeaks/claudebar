@@ -31,6 +31,7 @@ var menuItems = []menuItem{
 	{"~ Toggle remote control         ", "r", "_rc", ""},
 	{},
 	{"⚙ Features & defaults           ", "f", "_features", ""},
+	{"⋈ Router                        ", "o", "_router", ""},
 	{},
 	{"$ Shell pane                 ⌥S", "s", "_shell", ""},
 	{"# Tasks pane                 ⌥T", "t", "_tasks", ""},

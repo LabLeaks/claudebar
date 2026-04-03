@@ -332,7 +332,7 @@ func startSession(resumeSessionID string, extraArgs []string) {
 	for _, env := range state.featureEnvVars() {
 		tmuxArgs = append(tmuxArgs, "-e", env)
 	}
-	for _, env := range routerEnvVars(state.Router) {
+	for _, env := range routerEnvVars(state.Router, lookupRouterConfig(state.Router)) {
 		tmuxArgs = append(tmuxArgs, "-e", env)
 	}
 	tmuxArgs = append(tmuxArgs, claudeCmd)
@@ -534,10 +534,6 @@ func runFeatures() {
 			fmt.Sprintf("run-shell '%s _toggle %s'", self, envVar),
 		)
 	}
-
-	// Router section
-	routerArgs := routerMenuItems(self, sess, state, cfg)
-	menuArgs = append(menuArgs, routerArgs...)
 
 	tmuxExec(append([]string{"display-menu"}, menuArgs...)...)
 }

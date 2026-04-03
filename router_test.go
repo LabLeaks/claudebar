@@ -17,7 +17,7 @@ import (
 // full set of env vars Claude Code needs to route through CCR, with the
 // preset URL containing the router name.
 func TestRouterEnvVars_Active(t *testing.T) {
-	envs := routerEnvVars("foo")
+	envs := routerEnvVars("foo", nil)
 	if envs == nil {
 		t.Fatal("expected non-nil env vars for active router")
 	}
@@ -30,8 +30,8 @@ func TestRouterEnvVars_Active(t *testing.T) {
 	for _, e := range envs {
 		if strings.HasPrefix(e, "ANTHROPIC_BASE_URL=") {
 			foundBaseURL = true
-			if !strings.Contains(e, "/preset/foo/") {
-				t.Errorf("ANTHROPIC_BASE_URL should contain /preset/foo/, got %q", e)
+			if !strings.Contains(e, "/preset/foo") {
+				t.Errorf("ANTHROPIC_BASE_URL should contain /preset/foo, got %q", e)
 			}
 		}
 	}
@@ -65,7 +65,7 @@ func TestRouterEnvVars_Active(t *testing.T) {
 // TestRouterEnvVars_Empty verifies that an empty router name returns nil
 // (no env vars injected — session uses Anthropic directly).
 func TestRouterEnvVars_Empty(t *testing.T) {
-	envs := routerEnvVars("")
+	envs := routerEnvVars("", nil)
 	if envs != nil {
 		t.Errorf("expected nil for empty router name, got %v", envs)
 	}
@@ -269,7 +269,7 @@ func TestGenerateCCRConfig_WritesPresets(t *testing.T) {
 		t.Fatalf("generateCCRConfig: %v", err)
 	}
 
-	presetPath := filepath.Join(tmp, ".claude-code-router", "presets", "openrouter-qwen.json")
+	presetPath := filepath.Join(tmp, ".claude-code-router", "presets", "openrouter-qwen", "manifest.json")
 	data, err := os.ReadFile(presetPath)
 	if err != nil {
 		t.Fatalf("preset file not created: %v", err)
@@ -312,7 +312,7 @@ func TestGenerateCCRConfig_FilePermissions(t *testing.T) {
 	}
 
 	// Check preset
-	presetPath := filepath.Join(tmp, ".claude-code-router", "presets", "test-router.json")
+	presetPath := filepath.Join(tmp, ".claude-code-router", "presets", "test-router", "manifest.json")
 	info, err = os.Stat(presetPath)
 	if err != nil {
 		t.Fatalf("stat preset: %v", err)
@@ -349,7 +349,7 @@ func TestGenerateCCRConfig_MultipleProviders(t *testing.T) {
 
 	// Both presets should exist
 	for _, name := range []string{"or-qwen", "or-deepseek"} {
-		presetPath := filepath.Join(tmp, ".claude-code-router", "presets", name+".json")
+		presetPath := filepath.Join(tmp, ".claude-code-router", "presets", name, "manifest.json")
 		if _, err := os.Stat(presetPath); err != nil {
 			t.Errorf("preset %s not created: %v", name, err)
 		}

@@ -21,21 +21,22 @@ type routerConfig struct {
 	APIKey       string            `json:"api_key"`
 	Models       map[string]string `json:"models"`
 	Transformers []interface{}     `json:"transformers,omitempty"`
+	Context1M    bool              `json:"context_1m,omitempty"` // inject [1m] model aliases for 1M context window
 }
 
 // knownProviders maps provider short names to their API base URLs.
 var knownProviders = map[string]string{
-	"openrouter": "https://openrouter.ai/api/v1",
+	"openrouter": "https://openrouter.ai/api/v1/chat/completions",
 }
 
 // routerEnvVars returns the env vars to inject into a tmux session when routing
 // through CCR. Returns nil when routerName is empty (no router active).
-func routerEnvVars(routerName string) []string {
+func routerEnvVars(routerName string, rc *routerConfig) []string {
 	if routerName == "" {
 		return nil
 	}
-	return []string{
-		fmt.Sprintf("ANTHROPIC_BASE_URL=http://127.0.0.1:3456/preset/%s/v1/messages", routerName),
+	envs := []string{
+		fmt.Sprintf("ANTHROPIC_BASE_URL=http://127.0.0.1:3456/preset/%s", routerName),
 		"ANTHROPIC_AUTH_TOKEN=claudebar",
 		"ANTHROPIC_API_KEY=",
 		"DISABLE_PROMPT_CACHING=1",
@@ -43,6 +44,25 @@ func routerEnvVars(routerName string) []string {
 		"NO_PROXY=127.0.0.1",
 		"ENABLE_TOOL_SEARCH=true",
 	}
+	if rc != nil && rc.Context1M {
+		envs = append(envs,
+			"ANTHROPIC_DEFAULT_OPUS_MODEL=claude-opus-4-6[1m]",
+			"ANTHROPIC_DEFAULT_SONNET_MODEL=claude-sonnet-4-6[1m]",
+		)
+	}
+	return envs
+}
+
+// lookupRouterConfig loads the global config and returns the named router config, or nil.
+func lookupRouterConfig(name string) *routerConfig {
+	if name == "" {
+		return nil
+	}
+	cfg := loadConfig()
+	if cfg.RouterConfigs == nil {
+		return nil
+	}
+	return cfg.RouterConfigs[name]
 }
 
 // extractRouterFlag parses --router=<name> or --router <name> from args.
@@ -201,12 +221,23 @@ func generateCCRConfig(cfg *globalConfig) error {
 		providers = append(providers, p)
 	}
 
-	// Write main CCR config.json with CCR's expected top-level field names
+	// Write main CCR config.json with CCR's expected top-level field names.
+	// Router must have a default slot or CCR crashes on undefined access.
+	// Use the first router config's default as the main config's default.
+	mainRouter := map[string]interface{}{}
+	for _, rc := range cfg.RouterConfigs {
+		if d, ok := rc.Models["default"]; ok {
+			mainRouter["default"] = d
+			break
+		}
+	}
+
 	ccrConfig := map[string]interface{}{
 		"PORT":      3456,
 		"HOST":      "127.0.0.1",
 		"APIKEY":    "",
 		"Providers": providers,
+		"Router":    mainRouter,
 	}
 
 	configData, err := json.MarshalIndent(ccrConfig, "", "  ")
@@ -218,21 +249,60 @@ func generateCCRConfig(cfg *globalConfig) error {
 		return fmt.Errorf("writing CCR config: %w", err)
 	}
 
-	// Write preset files — one per router config.
-	// CCR preset structure: { config: { Router: { slot: "provider,model" } } }
+	// Write preset directories — one per router config.
+	// CCR expects: presets/<name>/manifest.json (directory, not a file).
+	// Manifest must be flat with its own Providers array (each preset gets isolated services).
+	// All Router slots must be populated — CCR crashes on undefined slot access.
+	ccrSlots := []string{"default", "background", "think", "longContext", "webSearch", "image"}
 	for name, rc := range cfg.RouterConfigs {
-		preset := map[string]interface{}{
-			"config": map[string]interface{}{
-				"Router": rc.Models,
-			},
+		presetDir := filepath.Join(presetsDir, name)
+		if err := os.MkdirAll(presetDir, 0755); err != nil {
+			return fmt.Errorf("creating preset dir %q: %w", name, err)
 		}
-		presetData, err := json.MarshalIndent(preset, "", "  ")
+
+		// Fill all slots from user config, falling back to "default" for unset slots
+		routerSlots := make(map[string]interface{})
+		defaultVal := rc.Models["default"]
+		for _, slot := range ccrSlots {
+			if v, ok := rc.Models[slot]; ok {
+				routerSlots[slot] = v
+			} else {
+				routerSlots[slot] = defaultVal
+			}
+		}
+
+		// Build preset's own provider entry
+		baseURL, _ := knownProviders[rc.Provider]
+		presetProvider := map[string]interface{}{
+			"name":         rc.Provider,
+			"api_base_url": baseURL,
+			"api_key":      rc.APIKey,
+		}
+		if len(rc.Transformers) > 0 {
+			presetProvider["transformer"] = map[string]interface{}{"use": rc.Transformers}
+		}
+
+		manifest := map[string]interface{}{
+			"name":      name,
+			"version":   "1.0.0",
+			"Providers": []interface{}{presetProvider},
+			"Router":    routerSlots,
+		}
+		manifestData, err := json.MarshalIndent(manifest, "", "  ")
 		if err != nil {
 			return fmt.Errorf("marshaling preset %q: %w", name, err)
 		}
-		presetPath := filepath.Join(presetsDir, name+".json")
-		if err := os.WriteFile(presetPath, presetData, 0600); err != nil {
+		manifestPath := filepath.Join(presetDir, "manifest.json")
+		if err := os.WriteFile(manifestPath, manifestData, 0600); err != nil {
 			return fmt.Errorf("writing preset %q: %w", name, err)
+		}
+	}
+
+	// Clean up any stale .json files from old format
+	entries, _ := os.ReadDir(presetsDir)
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
+			os.Remove(filepath.Join(presetsDir, e.Name()))
 		}
 	}
 
@@ -341,31 +411,64 @@ func countRoutedSessions() int {
 	return count
 }
 
-// routerMenuItems returns tmux display-menu args for the router section.
+// runRouterMenu shows the top-level router submenu.
+// If ccr is not installed, shows install instructions in a popup instead.
+func runRouterMenu() {
+	if _, err := exec.LookPath("ccr"); err != nil {
+		script := `
+stty -echo 2>/dev/null
+printf '\n  This feature requires Claude Code Router (ccr).\n\n  Install:\n\n    \033[32mnpm install -g @musistudio/claude-code-router\033[0m\n\n  \033[90mc copy command  q/esc close\033[0m\n'
+while true; do
+  IFS= read -rsn1 key
+  case "$key" in
+    c) printf 'npm install -g @musistudio/claude-code-router' | pbcopy; printf '\r  \033[32mCopied to clipboard!\033[0m                    '; sleep 1; break;;
+    q) break;;
+    $'\e') break;;
+  esac
+done
+`
+		tmuxExec("display-popup", "-E", "-w", "58", "-h", "10", "bash", "-c", script)
+		return
+	}
+
+	sess := currentSession()
+	state := loadState(sess)
+	cfg := loadConfig()
+	self := selfPath()
+
+	args := routerMenuItems(self, sess, state, cfg)
+	tmuxExec(append([]string{"display-menu", "-T", " #[fg=#00d4ff,bold]Router  " + featureLegend()}, args...)...)
+}
+
+func featureLegend() string {
+	return "○ off  ● on  ◉ always "
+}
+
+// routerMenuItems returns tmux display-menu args for the router submenu.
 func routerMenuItems(self, sess string, state *claudeSessionState, cfg *globalConfig) []string {
-	if len(cfg.RouterConfigs) == 0 {
-		return nil
-	}
-
 	var args []string
-	args = append(args, "") // separator before section
-	args = append(args, "#[fg=#888888]Router", "", "")
 
-	// Sort config names for deterministic menu order
-	names := make([]string, 0, len(cfg.RouterConfigs))
-	for name := range cfg.RouterConfigs {
-		names = append(names, name)
-	}
-	sort.Strings(names)
+	if len(cfg.RouterConfigs) > 0 {
+		// Sort config names for deterministic menu order
+		names := make([]string, 0, len(cfg.RouterConfigs))
+		for name := range cfg.RouterConfigs {
+			names = append(names, name)
+		}
+		sort.Strings(names)
 
-	for i, name := range names {
-		sessionOn := state.Router == name
-		configOn := cfg.Router == name
-		label := fmt.Sprintf("%s  %s", featureState(sessionOn, configOn), name)
-		key := strconv.Itoa(i + 1)
-		args = append(args, label, key,
-			fmt.Sprintf("run-shell '%s _toggle_router %s'", self, name))
+		for i, name := range names {
+			sessionOn := state.Router == name
+			configOn := cfg.Router == name
+			label := fmt.Sprintf("%s  %s", featureState(sessionOn, configOn), name)
+			key := strconv.Itoa(i + 1)
+			args = append(args, label, key,
+				fmt.Sprintf("run-shell '%s _toggle_router %s'", self, name))
+		}
 	}
+
+	// Always show "new config" option — use display-popup for interactive TUI
+	args = append(args, "#[fg=#00ff88]  + New router config...", "n",
+		fmt.Sprintf("display-popup -E -w 60 -h 20 '%s _new_router'", self))
 
 	return args
 }
