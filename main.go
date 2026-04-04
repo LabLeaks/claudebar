@@ -75,6 +75,8 @@ func main() {
 		if len(os.Args) > 2 {
 			runToggleFeature(os.Args[2])
 		}
+	case "_apply":
+		runApply()
 	case "_router":
 		runRouterMenu()
 	case "_toggle_router":

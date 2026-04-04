@@ -19,6 +19,7 @@ type claudeSessionState struct {
 	WorkDir        string            `json:"work_dir"`
 	Features       map[string]bool   `json:"features,omitempty"` // toggleable env var features
 	Router         string            `json:"router,omitempty"`   // active router config name
+	PendingRestart bool              `json:"pending_restart,omitempty"` // true when toggles changed but not yet applied
 }
 
 type feature struct {
@@ -525,6 +526,9 @@ func resolveSessionID(state *claudeSessionState) string {
 
 // restartClaudeWithResume kills current claude and relaunches with --resume
 func restartClaudeWithResume(tmuxSession string, state *claudeSessionState) error {
+	// Clear pending restart flag — we're restarting now
+	state.PendingRestart = false
+
 	// Only validate, don't overwrite state.SessionID with empty
 	resolved := resolveSessionID(state)
 	if resolved != "" {

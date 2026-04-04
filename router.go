@@ -160,6 +160,16 @@ func runRouterMenu() {
 	self := selfPath()
 
 	args := routerMenuItems(self, sess, state, cfg)
+
+	// Show "Apply & restart" when toggles have been changed
+	if state.PendingRestart {
+		args = append(args, "")
+		args = append(args,
+			"#[fg=#ff8800,bold]  Apply & restart ↵", "",
+			fmt.Sprintf("run-shell '%s _apply'", self),
+		)
+	}
+
 	tmuxExec(append([]string{"display-menu", "-T", " #[fg=#00d4ff,bold]Router  " + featureLegend()}, args...)...)
 }
 
@@ -244,23 +254,14 @@ func runToggleRouter(configName string) {
 	sessionChanged := old.Router != state.Router
 
 	if sessionChanged {
-		if state.Router != "" {
-			if err := ensureProxyRunning(cfg, configName); err != nil {
-				tmuxExec("display-message", fmt.Sprintf("Router error: %v", err))
-				return
-			}
-		}
-		tmuxExec("display-message", fmt.Sprintf("%s → %s (restarting...)", configName, newState))
-		restartClaudeWithResume(sess, state)
-
-		// If deactivating and no other routed sessions, stop proxy
-		if state.Router == "" && countRoutedSessions() == 0 {
-			stopProxy()
-		}
-	} else {
-		tmuxExec("display-message", fmt.Sprintf("%s → %s", configName, newState))
-		saveState(sess, state)
+		state.PendingRestart = true
 	}
+
+	saveState(sess, state)
+	tmuxExec("display-message", fmt.Sprintf("%s → %s", configName, newState))
+
+	// Re-show the menu so user can make more changes
+	runRouterMenu()
 }
 
 // cleanupOrphanedTransports stops the proxy if no sessions use it.
@@ -374,7 +375,9 @@ func ensureProxyRunning(cfg *globalConfig, routerName string) error {
 	cmd := exec.Command(self, "_proxy_server")
 	cmd.Stdin = strings.NewReader(string(presetsJSON))
 	cmd.Stdout = nil
-	cmd.Stderr = nil
+	// Log proxy stderr for debugging panics and errors
+	logFile, _ := os.OpenFile(filepath.Join(configDir(), "proxy.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	cmd.Stderr = logFile
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 
 	if err := cmd.Start(); err != nil {

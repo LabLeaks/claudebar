@@ -553,6 +553,15 @@ func runFeatures() {
 		)
 	}
 
+	// Show "Apply & restart" when toggles have been changed
+	if state.PendingRestart {
+		menuArgs = append(menuArgs, "")
+		menuArgs = append(menuArgs,
+			"#[fg=#ff8800,bold]  Apply & restart ↵", "",
+			fmt.Sprintf("run-shell '%s _apply'", self),
+		)
+	}
+
 	tmuxExec(append([]string{"display-menu"}, menuArgs...)...)
 }
 
@@ -627,7 +636,7 @@ func runToggleFeature(envVar string) {
 		newState = featureState(state.isFeatureOn(envVar), cfg.Features[envVar])
 	}
 
-	// Only restart if the session state actually changed
+	// Check if the session state actually changed
 	var sessionChanged bool
 	switch envVar {
 	case "bypass_permissions":
@@ -642,12 +651,41 @@ func runToggleFeature(envVar string) {
 	}
 
 	if sessionChanged {
-		tmuxExec("display-message", fmt.Sprintf("%s → %s (restarting...)", label, newState))
-		restartClaudeWithResume(sess, state)
-	} else {
-		tmuxExec("display-message", fmt.Sprintf("%s → %s", label, newState))
-		saveState(sess, state)
+		state.PendingRestart = true
 	}
+
+	saveState(sess, state)
+	tmuxExec("display-message", fmt.Sprintf("%s → %s", label, newState))
+
+	// Re-show the menu so user can make more changes
+	runFeatures()
+}
+
+func runApply() {
+	sess := currentSession()
+	state := loadState(sess)
+
+	if !state.PendingRestart {
+		tmuxExec("display-message", "Nothing to apply")
+		return
+	}
+
+	state.PendingRestart = false
+
+	// Ensure proxy is running/stopped as needed
+	cfg := loadConfig()
+	if state.Router != "" {
+		if err := ensureProxyRunning(cfg, state.Router); err != nil {
+			tmuxExec("display-message", fmt.Sprintf("Router error: %v", err))
+			return
+		}
+	} else if countRoutedSessions() <= 1 {
+		// This is the last (or only) routed session being deactivated
+		stopProxy()
+	}
+
+	tmuxExec("display-message", "Applying changes (restarting...)")
+	restartClaudeWithResume(sess, state)
 }
 
 func runShell() {

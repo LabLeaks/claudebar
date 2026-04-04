@@ -357,7 +357,7 @@ func (p *Proxy) forwardToOpenRouter(openaiReq OpenAIRequest, cfg ProxyConfig, an
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return nil, fmt.Errorf("OpenRouter error (%d): %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("OpenRouter error (%d): %s", resp.StatusCode, cleanErrorBody(resp.StatusCode, respBody))
 	}
 
 	var openrouterResp OpenRouterResponse
@@ -397,10 +397,44 @@ func (p *Proxy) forwardToOpenRouterStream(openaiReq OpenAIRequest, cfg ProxyConf
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		resp.Body.Close()
-		return nil, fmt.Errorf("OpenRouter stream error (%d): %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("OpenRouter stream error (%d): %s", resp.StatusCode, cleanErrorBody(resp.StatusCode, respBody))
 	}
 
 	return resp.Body, nil
+}
+
+// cleanErrorBody extracts a human-readable message from an error response body.
+// If the body is HTML (e.g. Cloudflare error pages), returns a short summary.
+// If JSON with an error.message field, returns just that message.
+// Otherwise returns the raw body (truncated).
+func cleanErrorBody(statusCode int, body []byte) string {
+	s := strings.TrimSpace(string(body))
+
+	// HTML error page (Cloudflare, nginx, etc) — don't dump the markup
+	if strings.HasPrefix(s, "<!DOCTYPE") || strings.HasPrefix(s, "<html") || strings.HasPrefix(s, "<HTML") {
+		// Try to extract <title> content
+		re := regexp.MustCompile(`(?i)<title[^>]*>([^<]+)</title>`)
+		if m := re.FindStringSubmatch(s); len(m) > 1 {
+			return strings.TrimSpace(m[1])
+		}
+		return fmt.Sprintf("upstream returned HTML error page (HTTP %d)", statusCode)
+	}
+
+	// JSON error — extract the message field
+	var errResp struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(body, &errResp) == nil && errResp.Error.Message != "" {
+		return errResp.Error.Message
+	}
+
+	// Fallback: return raw body, capped at a reasonable length
+	if len(s) > 200 {
+		return s[:200] + "…"
+	}
+	return s
 }
 
 // logUsage logs usage data for a session with LRU eviction

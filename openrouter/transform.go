@@ -352,23 +352,23 @@ func ForwardSSEStream(w io.Writer, resp io.Reader, reqID, model string) (*Usage,
 				// Final message_delta event
 				if isFinal {
 					var stopSeq *string
+					usageMap := map[string]interface{}{
+						"output_tokens": 0,
+					}
+					if chunk.Usage != nil {
+						usageMap["output_tokens"] = chunk.Usage.CompletionTokens
+						if chunk.Usage.PromptTokensDetails != nil {
+							usageMap["cache_read_input_tokens"] = chunk.Usage.PromptTokensDetails.CachedTokens
+							usageMap["cache_creation_input_tokens"] = chunk.Usage.PromptTokensDetails.CacheWriteTokens
+						}
+					}
 					anthropicChunk := map[string]interface{}{
 						"type": "message_delta",
 						"delta": map[string]interface{}{
 							"stop_reason":   *choice.FinishReason,
 							"stop_sequence": stopSeq,
 						},
-						"usage": map[string]interface{}{
-							"output_tokens": chunk.Usage.CompletionTokens,
-						},
-					}
-					if chunk.Usage != nil {
-						usageMap := anthropicChunk["usage"].(map[string]interface{})
-						usageMap["output_tokens"] = chunk.Usage.CompletionTokens
-						if chunk.Usage.PromptTokensDetails != nil {
-							usageMap["cache_read_input_tokens"] = chunk.Usage.PromptTokensDetails.CachedTokens
-							usageMap["cache_creation_input_tokens"] = chunk.Usage.PromptTokensDetails.CacheWriteTokens
-						}
+						"usage": usageMap,
 					}
 					out, _ := json.Marshal(anthropicChunk)
 					fmt.Fprintf(w, "event: message\ndata: %s\n\n", string(out))
