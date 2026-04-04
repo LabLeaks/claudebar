@@ -82,8 +82,8 @@ func runDefault() {
 		os.Exit(1)
 	}
 
-	// Clean up orphaned CCR from prior kill-session
-	cleanupOrphanedCCR()
+	// Clean up orphaned transports (CCR + native proxy) from prior kill-session
+	cleanupOrphanedTransports()
 
 	if isInsideClaudebar() {
 		fmt.Println("Already inside claudebar. Use ⌥H for shortcuts.")
@@ -93,14 +93,15 @@ func runDefault() {
 	dir, _ := os.Getwd()
 	matching, _ := listSessions()
 
-	if len(matching) == 1 && len(claudeFlags()) == 0 {
-		// Exactly one session for this dir, no extra flags — reattach
-		tmuxExec("attach-session", "-t", matching[0].Name)
-		return
-	}
-
-	if len(matching) > 1 && len(claudeFlags()) == 0 {
-		// Multiple sessions for this dir — show picker (cwd sessions only)
+	// Only show existing sessions if they're live detached sessions for this dir
+	// and user didn't pass any flags (which implies intent to start fresh)
+	if len(matching) > 0 && len(claudeFlags()) == 0 {
+		if len(matching) == 1 {
+			// Exactly one active session for this dir — reattach
+			tmuxExec("attach-session", "-t", matching[0].Name)
+			return
+		}
+		// Multiple active sessions — show picker
 		dirName := filepath.Base(dir)
 		m := newPicker(matching, nil, dirName)
 		p := tea.NewProgram(m)
@@ -122,34 +123,40 @@ func runDefault() {
 		return
 	}
 
-	// No matching sessions — check for unclaimed claude sessions to resume
-	if len(claudeFlags()) == 0 {
-		unclaimed := findUnclaimedSessions(dir)
-		if len(unclaimed) > 0 {
-			dirName := filepath.Base(dir)
-			m := newPickerWithResume(unclaimed, dirName)
-			p := tea.NewProgram(m)
-			finalModel, err := p.Run()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
-				os.Exit(1)
-			}
-			result := finalModel.(pickerModel).result
-			if result == nil {
-				return
-			}
-			switch result.action {
-			case "resume":
-				startWithResume(result.session)
-			case "new":
-				startNew(claudeFlags())
-			}
-			return
-		}
+	// No active detached sessions (or flags specified) — start fresh.
+	// Past dead sessions are NOT shown. Use --resume to explicitly resume.
+	startNew(claudeFlags())
+}
+
+// runResumable: show past (dead) sessions that can be resumed for the current dir.
+// This is the old default behavior, now behind --resumable flag.
+func runResumable() {
+	dir, _ := os.Getwd()
+	unclaimed := findUnclaimedSessions(dir)
+	if len(unclaimed) == 0 {
+		fmt.Println("No resumable sessions found for this directory.")
+		fmt.Println("Start a new session with: claudebar")
+		return
 	}
 
-	// No matching sessions, no unclaimed sessions, or flags specified — start fresh
-	startNew(claudeFlags())
+	dirName := filepath.Base(dir)
+	m := newPickerWithResume(unclaimed, dirName)
+	p := tea.NewProgram(m)
+	finalModel, err := p.Run()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "TUI error: %v\n", err)
+		os.Exit(1)
+	}
+	result := finalModel.(pickerModel).result
+	if result == nil {
+		return
+	}
+	switch result.action {
+	case "resume":
+		startWithResume(result.session)
+	case "new":
+		startNew(nil)
+	}
 }
 
 // runSessions: show all claudebar sessions across all projects
@@ -302,9 +309,9 @@ func startSession(resumeSessionID string, extraArgs []string) {
 		}
 	}
 
-	// If router is active, ensure CCR is running before creating the session
+	// If router is active, ensure proxy is running
 	if state.Router != "" {
-		if err := ensureCCRRunning(cfg); err != nil {
+		if err := ensureProxyRunning(cfg, state.Router); err != nil {
 			fmt.Fprintf(os.Stderr, "Router error: %v\n", err)
 			os.Exit(1)
 		}
@@ -332,7 +339,7 @@ func startSession(resumeSessionID string, extraArgs []string) {
 	for _, env := range state.featureEnvVars() {
 		tmuxArgs = append(tmuxArgs, "-e", env)
 	}
-	for _, env := range routerEnvVars(state.Router, lookupRouterConfig(state.Router)) {
+	for _, env := range routerEnvVars(state.Router, lookupRouterConfig(state.Router), name) {
 		tmuxArgs = append(tmuxArgs, "-e", env)
 	}
 	tmuxArgs = append(tmuxArgs, claudeCmd)
@@ -346,6 +353,13 @@ func startSession(resumeSessionID string, extraArgs []string) {
 	paneID, _ := tmuxOutput("display-message", "-t", name, "-p", "#{pane_id}")
 	if paneID != "" {
 		saveMainPaneID(name, paneID)
+	}
+
+	// Capture Claude's session ID in background — polls ~/.claude/sessions/ for the
+	// session file matching our tmux pane's PID, then saves it to state.
+	// This is critical: without it, restarts can't resume the correct conversation.
+	if !resume {
+		go captureClaudeSessionID(name)
 	}
 
 	// Attach

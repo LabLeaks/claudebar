@@ -2,29 +2,46 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"time"
 )
 
 func runStatus() {
-	peak, localStart, localEnd := peakInfo()
-
-	if peak {
-		fmt.Printf("#[fg=#ff6b6b,bold]⚡PEAK#[fg=#888888] (til %s)", localEnd)
-	} else {
-		fmt.Printf("#[fg=#00ff88]🌙 OFF-PEAK#[fg=#888888] (til %s)", localStart)
+	// Session name passed as argument from tmux status-format #{session_name}
+	sess := ""
+	if len(os.Args) > 2 {
+		sess = os.Args[2]
 	}
-
-	// Show active router if set
-	sess := currentSession()
+	if sess == "" {
+		sess = currentSession()
+	}
 	state := loadState(sess)
-	if state.Router != "" {
-		fmt.Printf("#[fg=#1a1a2e]  #[fg=#b388ff,bold]⚡ %s", state.Router)
+	usage := loadCachedUsage(sess)
+	routerActive := state.Router != ""
+
+	// Peak/offpeak only relevant for direct Anthropic sessions
+	if !routerActive {
+		peak, localStart, localEnd := peakInfo()
+		if peak {
+			fmt.Printf("#[fg=#ff6b6b,bold]⚡PEAK#[fg=#888888] (til %s)", localEnd)
+		} else {
+			fmt.Printf("#[fg=#00ff88]🌙 OFF-PEAK#[fg=#888888] (til %s)", localStart)
+		}
 	}
 
-	// Show usage from cached statusline data
-	usage := loadCachedUsage(sess)
-	if usage == nil || (usage.FiveHourPct == 0 && usage.FiveHourReset == 0) {
-		// No rate limit data yet (arrives after first API response with usage info)
+	// Show active router name
+	if routerActive {
+		fmt.Printf("#[fg=#b388ff,bold]⚡ %s", state.Router)
+	}
+
+	// Usage display: token/cost for router, % for Anthropic
+	if routerActive {
+		if usage != nil && usage.RouterActive && (usage.TotalTokens > 0 || usage.CostUSD > 0) {
+			fmt.Printf("#[fg=#1a1a2e]  #[fg=#00ff88]⏱ %s | $%.2f", formatTokens(usage.TotalTokens), usage.CostUSD)
+		} else {
+			fmt.Printf("#[fg=#1a1a2e]  #[fg=#555555]⏱ TOKENS ... | $...")
+		}
+	} else if usage == nil || (usage.FiveHourPct == 0 && usage.FiveHourReset == 0) {
 		fmt.Printf("#[fg=#1a1a2e]  #[fg=#555555]⏱ USAGE ...")
 	} else {
 		pct := usage.FiveHourPct
@@ -36,12 +53,23 @@ func runStatus() {
 		}
 		fmt.Printf("#[fg=#1a1a2e]  #[fg=%s]⏱ USAGE %d%%", color, int(pct))
 
-		// Show reset time like peak does
 		if usage.FiveHourReset > 0 {
 			resetTime := time.Unix(usage.FiveHourReset, 0)
 			local := resetTime.In(time.Now().Location())
 			fmt.Printf("#[fg=#888888] (resets %s)", local.Format("3:04pm"))
 		}
+	}
+}
+
+// formatTokens formats token counts for display (e.g., 282000 → "282K", 1500000 → "1.5M")
+func formatTokens(tokens int) string {
+	switch {
+	case tokens >= 1_000_000:
+		return fmt.Sprintf("%.1fM", float64(tokens)/1_000_000)
+	case tokens >= 1_000:
+		return fmt.Sprintf("%dK", tokens/1_000)
+	default:
+		return fmt.Sprintf("%d", tokens)
 	}
 }
 

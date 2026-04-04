@@ -1,8 +1,6 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,10 +12,11 @@ import (
 // ---------------------------------------------------------------------------
 
 // TestRouterEnvVars_Active verifies that an active router name produces the
-// full set of env vars Claude Code needs to route through CCR, with the
-// preset URL containing the router name.
+// full set of env vars Claude Code needs to route through the native proxy,
+// with the preset URL containing the router name.
 func TestRouterEnvVars_Active(t *testing.T) {
-	envs := routerEnvVars("foo", nil)
+	rc := &routerConfig{Provider: "openrouter", APIKey: "test", Models: map[string]string{"default": "qwen/test"}}
+	envs := routerEnvVars("foo", rc, "test-session")
 	if envs == nil {
 		t.Fatal("expected non-nil env vars for active router")
 	}
@@ -65,7 +64,7 @@ func TestRouterEnvVars_Active(t *testing.T) {
 // TestRouterEnvVars_Empty verifies that an empty router name returns nil
 // (no env vars injected — session uses Anthropic directly).
 func TestRouterEnvVars_Empty(t *testing.T) {
-	envs := routerEnvVars("", nil)
+	envs := routerEnvVars("", nil, "")
 	if envs != nil {
 		t.Errorf("expected nil for empty router name, got %v", envs)
 	}
@@ -210,163 +209,8 @@ func TestValidateRouterConfig(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// generateCCRConfig — filesystem tests
+// (CCR tests removed — CCR replaced by native proxy in sprint 005)
 // ---------------------------------------------------------------------------
-
-// TestGenerateCCRConfig_WritesMainConfig verifies that generateCCRConfig creates
-// the CCR config.json file under ~/.claude-code-router/.
-func TestGenerateCCRConfig_WritesMainConfig(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("HOME", tmp)
-
-	cfg := &globalConfig{
-		RouterConfigs: map[string]*routerConfig{
-			"test-router": {
-				Provider: "openrouter",
-				APIKey:   "sk-test",
-				Models:   map[string]string{"default": "openrouter,qwen/qwen3.6-plus:free"},
-			},
-		},
-	}
-
-	if err := generateCCRConfig(cfg); err != nil {
-		t.Fatalf("generateCCRConfig: %v", err)
-	}
-
-	configPath := filepath.Join(tmp, ".claude-code-router", "config.json")
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		t.Fatalf("config.json not created: %v", err)
-	}
-
-	// Should be valid JSON
-	var parsed map[string]interface{}
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		t.Fatalf("config.json is not valid JSON: %v", err)
-	}
-}
-
-// TestGenerateCCRConfig_WritesPresets verifies that each router config gets a
-// corresponding preset file under ~/.claude-code-router/presets/.
-func TestGenerateCCRConfig_WritesPresets(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("HOME", tmp)
-
-	cfg := &globalConfig{
-		RouterConfigs: map[string]*routerConfig{
-			"openrouter-qwen": {
-				Provider: "openrouter",
-				APIKey:   "sk-test",
-				Models: map[string]string{
-					"default": "openrouter,qwen/qwen3.6-plus:free",
-					"think":   "openrouter,qwen/qwen3.6-plus:free",
-				},
-			},
-		},
-	}
-
-	if err := generateCCRConfig(cfg); err != nil {
-		t.Fatalf("generateCCRConfig: %v", err)
-	}
-
-	presetPath := filepath.Join(tmp, ".claude-code-router", "presets", "openrouter-qwen", "manifest.json")
-	data, err := os.ReadFile(presetPath)
-	if err != nil {
-		t.Fatalf("preset file not created: %v", err)
-	}
-
-	var parsed map[string]interface{}
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		t.Fatalf("preset file is not valid JSON: %v", err)
-	}
-}
-
-// TestGenerateCCRConfig_FilePermissions verifies that all generated files have
-// mode 0600 since they contain API keys.
-func TestGenerateCCRConfig_FilePermissions(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("HOME", tmp)
-
-	cfg := &globalConfig{
-		RouterConfigs: map[string]*routerConfig{
-			"test-router": {
-				Provider: "openrouter",
-				APIKey:   "sk-secret",
-				Models:   map[string]string{"default": "openrouter,model"},
-			},
-		},
-	}
-
-	if err := generateCCRConfig(cfg); err != nil {
-		t.Fatalf("generateCCRConfig: %v", err)
-	}
-
-	// Check main config
-	configPath := filepath.Join(tmp, ".claude-code-router", "config.json")
-	info, err := os.Stat(configPath)
-	if err != nil {
-		t.Fatalf("stat config.json: %v", err)
-	}
-	if info.Mode().Perm() != 0600 {
-		t.Errorf("config.json mode: got %o, want 0600", info.Mode().Perm())
-	}
-
-	// Check preset
-	presetPath := filepath.Join(tmp, ".claude-code-router", "presets", "test-router", "manifest.json")
-	info, err = os.Stat(presetPath)
-	if err != nil {
-		t.Fatalf("stat preset: %v", err)
-	}
-	if info.Mode().Perm() != 0600 {
-		t.Errorf("preset mode: got %o, want 0600", info.Mode().Perm())
-	}
-}
-
-// TestGenerateCCRConfig_MultipleProviders verifies that two router configs using
-// different providers result in both providers appearing in the generated config.
-func TestGenerateCCRConfig_MultipleProviders(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("HOME", tmp)
-
-	cfg := &globalConfig{
-		RouterConfigs: map[string]*routerConfig{
-			"or-qwen": {
-				Provider: "openrouter",
-				APIKey:   "sk-or",
-				Models:   map[string]string{"default": "openrouter,qwen/qwen3.6-plus:free"},
-			},
-			"or-deepseek": {
-				Provider: "openrouter",
-				APIKey:   "sk-or",
-				Models:   map[string]string{"default": "openrouter,deepseek/deepseek-coder-v3"},
-			},
-		},
-	}
-
-	if err := generateCCRConfig(cfg); err != nil {
-		t.Fatalf("generateCCRConfig: %v", err)
-	}
-
-	// Both presets should exist
-	for _, name := range []string{"or-qwen", "or-deepseek"} {
-		presetPath := filepath.Join(tmp, ".claude-code-router", "presets", name, "manifest.json")
-		if _, err := os.Stat(presetPath); err != nil {
-			t.Errorf("preset %s not created: %v", name, err)
-		}
-	}
-
-	// Main config should exist and be valid JSON
-	configPath := filepath.Join(tmp, ".claude-code-router", "config.json")
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		t.Fatalf("config.json not found: %v", err)
-	}
-	var parsed map[string]interface{}
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		t.Fatalf("config.json is not valid JSON: %v", err)
-	}
-}
-
 // ---------------------------------------------------------------------------
 // Config/state round-trip — filesystem tests
 // ---------------------------------------------------------------------------
@@ -384,10 +228,9 @@ func TestConfigRoundTrip_WithRouterConfigs(t *testing.T) {
 		Router:         "openrouter-qwen",
 		RouterConfigs: map[string]*routerConfig{
 			"openrouter-qwen": {
-				Provider:     "openrouter",
-				APIKey:       "sk-test-key",
-				Models:       map[string]string{"default": "openrouter,qwen/qwen3.6-plus:free", "think": "openrouter,qwen/qwen3.6-plus:free"},
-				Transformers: []interface{}{"openrouter", "enhancetool", "cleancache"},
+				Provider: "openrouter",
+				APIKey:   "sk-test-key",
+				Models:   map[string]string{"default": "openrouter,qwen/qwen3.6-plus:free", "think": "openrouter,qwen/qwen3.6-plus:free"},
 			},
 		},
 	}
@@ -582,40 +425,6 @@ func TestCountRoutedSessions_None(t *testing.T) {
 	count := countRoutedSessions()
 	if count != 0 {
 		t.Errorf("countRoutedSessions: got %d, want 0", count)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// ccrRunning — CCR liveness check
-// ---------------------------------------------------------------------------
-
-// TestCcrRunning_NoPidFile verifies that ccrRunning returns (0, false) when
-// no PID file exists (CCR was never started or was cleaned up).
-func TestCcrRunning_NoPidFile(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("HOME", tmp)
-
-	pid, alive := ccrRunning()
-	if pid != 0 || alive {
-		t.Errorf("no pid file: got (%d, %v), want (0, false)", pid, alive)
-	}
-}
-
-// TestCcrRunning_StalePid verifies that ccrRunning returns (0, false) when
-// the PID file contains a PID that doesn't correspond to a running process.
-func TestCcrRunning_StalePid(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("HOME", tmp)
-
-	// Write a PID file with a PID that almost certainly doesn't exist
-	pidDir := filepath.Join(tmp, ".config", "claudebar")
-	os.MkdirAll(pidDir, 0755)
-	pidFile := filepath.Join(pidDir, "ccr.pid")
-	os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", 2147483647)), 0600)
-
-	pid, alive := ccrRunning()
-	if alive {
-		t.Errorf("stale pid: got (%d, %v), want (_, false)", pid, alive)
 	}
 }
 

@@ -26,6 +26,8 @@ func main() {
 		fmt.Printf("claudebar %s (%s, %s)\n", version, commit, date)
 	case "sessions", "s":
 		runSessions()
+	case "--resumable":
+		runResumable()
 
 	// Internal (called by tmux keybinds)
 	case "_status":
@@ -83,6 +85,8 @@ func main() {
 		runRouterWizard()
 	case "_statusline":
 		runStatusLine()
+	case "_proxy_server":
+		runProxyServer()
 
 	default:
 		// Anything else: pass through as claude flags

@@ -222,30 +222,14 @@ func (m routerWizardModel) buildResult() *routerWizardResult {
 		models["think"] = provider + "," + thinkModel
 	}
 
-	// Sensible default transformers per provider
-	transformers := defaultTransformers(provider)
-
 	return &routerWizardResult{
 		name: name,
 		config: &routerConfig{
-			Provider:     provider,
-			APIKey:       apiKey,
-			Models:       models,
-			Transformers: transformers,
-			Context1M:    m.context1m,
+			Provider:  provider,
+			APIKey:    apiKey,
+			Models:    models,
+			Context1M: m.context1m,
 		},
-	}
-}
-
-// defaultTransformers returns sensible transformer defaults for a provider.
-func defaultTransformers(provider string) []interface{} {
-	switch provider {
-	case "openrouter":
-		return []interface{}{"openrouter", "enhancetool", "cleancache"}
-	case "deepseek":
-		return []interface{}{"deepseek", "enhancetool", "cleancache", "reasoning"}
-	default:
-		return []interface{}{"enhancetool", "cleancache"}
 	}
 }
 
@@ -353,17 +337,6 @@ func (m routerWizardModel) View() tea.View {
 
 	case stepConfirm:
 		b.WriteString("\n")
-		// Show transformers that will be applied
-		provider := m.fields[1]
-		transformers := defaultTransformers(provider)
-		tNames := make([]string, len(transformers))
-		for i, t := range transformers {
-			tNames[i] = fmt.Sprint(t)
-		}
-		b.WriteString(fmt.Sprintf("  %s  %s\n",
-			wizardLabelStyle.Render(fmt.Sprintf("%-14s", "Transformers")),
-			wizardDimStyle.Render(strings.Join(tNames, ", "))))
-		b.WriteString("\n")
 		b.WriteString(wizardInputStyle.Render("  Save this config? (y/enter to save, n/esc to cancel)"))
 		b.WriteString("\n")
 
@@ -443,11 +416,6 @@ func runRouterWizard() {
 	if err := saveConfig(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "Error saving config: %v\n", err)
 		return
-	}
-
-	// Regenerate CCR config if CCR is running
-	if _, alive := ccrRunning(); alive {
-		generateCCRConfig(cfg)
 	}
 
 	tmuxExec("display-message", fmt.Sprintf("Router config %q saved", result.name))

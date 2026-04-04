@@ -9,7 +9,8 @@ import (
 	"time"
 )
 
-// statusLineData is the JSON Claude Code sends to the statusline command via stdin
+// statusLineData is the JSON Claude Code sends to the statusline command via stdin.
+// See sprint-005 CC source analysis for full schema.
 type statusLineData struct {
 	Model struct {
 		ID          string `json:"id"`
@@ -26,8 +27,24 @@ type statusLineData struct {
 		} `json:"seven_day"`
 	} `json:"rate_limits"`
 	ContextWindow *struct {
-		UsedPercentage int `json:"used_percentage"`
+		TotalInputTokens  int `json:"total_input_tokens"`
+		TotalOutputTokens int `json:"total_output_tokens"`
+		ContextWindowSize int `json:"context_window_size"`
+		CurrentUsage      *struct {
+			InputTokens              int `json:"input_tokens"`
+			OutputTokens             int `json:"output_tokens"`
+			CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+			CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+		} `json:"current_usage"`
+		UsedPercentage      *int `json:"used_percentage"`
+		RemainingPercentage *int `json:"remaining_percentage"`
 	} `json:"context_window"`
+	Workspace *struct {
+		CurrentDir string   `json:"current_dir"`
+		ProjectDir string   `json:"project_dir"`
+		AddedDirs  []string `json:"added_dirs"`
+	} `json:"workspace"`
+	Version string `json:"version"`
 }
 
 // cachedUsage is what we write to the temp file for the status bar to read
@@ -38,6 +55,12 @@ type cachedUsage struct {
 	ContextPct   int     `json:"context_pct"`
 	Model        string  `json:"model"`
 	UpdatedAt    int64   `json:"updated_at"`
+
+	// OpenRouter-specific usage (set when router uses OpenRouter proxy)
+	TotalTokens  int     `json:"total_tokens,omitempty"`
+	CachedTokens int     `json:"cached_tokens,omitempty"`
+	CostUSD      float64 `json:"cost_usd,omitempty"`
+	RouterActive bool    `json:"router_active,omitempty"`
 }
 
 func usageCacheFile(sessionName string) string {
@@ -81,7 +104,21 @@ func runStatusLine() {
 		}
 	}
 	if sl.ContextWindow != nil {
-		cache.ContextPct = sl.ContextWindow.UsedPercentage
+		if sl.ContextWindow.UsedPercentage != nil {
+			cache.ContextPct = *sl.ContextWindow.UsedPercentage
+		}
+		// For router sessions, use cumulative token counts from CC's own tracking
+		cache.TotalTokens = sl.ContextWindow.TotalInputTokens + sl.ContextWindow.TotalOutputTokens
+		if sl.ContextWindow.CurrentUsage != nil {
+			cache.CachedTokens = sl.ContextWindow.CurrentUsage.CacheReadInputTokens
+		}
+	}
+
+	// Check if router is active — CC's statusline gives us tokens directly
+	sess := currentSession()
+	state := loadState(sess)
+	if state.Router != "" {
+		cache.RouterActive = true
 	}
 
 	cacheData, _ := json.Marshal(cache)
@@ -139,3 +176,4 @@ func loadCachedUsage(sessionName string) *cachedUsage {
 	}
 	return &cache
 }
+

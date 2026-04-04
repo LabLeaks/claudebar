@@ -255,10 +255,25 @@ func launchClaudeWithExtra(tmuxSession string, state *claudeSessionState, resume
 
 // shellQuote wraps a string in single quotes if it contains spaces or special chars
 func shellQuote(s string) string {
-	if strings.ContainsAny(s, " \t'\"\\$`!") {
+	if strings.ContainsAny(s, " \t'\"\\$`!?*[]{}") {
 		return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 	}
 	return s
+}
+
+// shellQuoteEnvVar quotes the value part of a KEY=VALUE env var if needed.
+// e.g. "ANTHROPIC_BASE_URL=http://...?session=foo" → "ANTHROPIC_BASE_URL='http://...?session=foo'"
+func shellQuoteEnvVar(env string) string {
+	idx := strings.Index(env, "=")
+	if idx < 0 {
+		return env
+	}
+	key := env[:idx]
+	val := env[idx+1:]
+	if strings.ContainsAny(val, " \t'\"\\$`!?*[]{}") {
+		return key + "='" + strings.ReplaceAll(val, "'", "'\\''") + "'"
+	}
+	return env
 }
 
 // toggleBypassPermissions flips between default and bypassPermissions
@@ -435,6 +450,64 @@ func findUnclaimedSessions(workDir string) []sessionInfo {
 	return result
 }
 
+// captureClaudeSessionID polls ~/.claude/sessions/ to find the session file
+// created by the Claude process in our tmux session, then saves its sessionId
+// to claudebar state. This ensures restarts resume the correct conversation
+// even if no messages have been exchanged yet.
+func captureClaudeSessionID(tmuxSession string) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	sessionsDir := filepath.Join(home, ".claude", "sessions")
+
+	// Poll for up to 30 seconds — Claude may take a moment to start
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		time.Sleep(2 * time.Second)
+
+		// Get the PID of the process running in our tmux pane
+		pidStr, err := tmuxOutput("display-message", "-t", tmuxSession+":0.0", "-p", "#{pane_pid}")
+		if err != nil || pidStr == "" {
+			continue
+		}
+		pid := strings.TrimSpace(pidStr)
+
+		// Look for a session file matching this PID (or its child)
+		entries, err := os.ReadDir(sessionsDir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+				continue
+			}
+			data, err := os.ReadFile(filepath.Join(sessionsDir, e.Name()))
+			if err != nil {
+				continue
+			}
+			var sessFile struct {
+				PID       int    `json:"pid"`
+				SessionID string `json:"sessionId"`
+			}
+			if err := json.Unmarshal(data, &sessFile); err != nil {
+				continue
+			}
+			// Match by PID (session file is named {pid}.json)
+			if fmt.Sprintf("%d", sessFile.PID) == pid || strings.TrimSuffix(e.Name(), ".json") == pid {
+				if sessFile.SessionID != "" {
+					state := loadState(tmuxSession)
+					if state.SessionID == "" {
+						state.SessionID = sessFile.SessionID
+						saveState(tmuxSession, state)
+					}
+					return
+				}
+			}
+		}
+	}
+}
+
 // resolveSessionID returns the session ID from state. If state.SessionID is
 // empty or its .jsonl is gone, it returns empty — we don't guess by scanning
 // for "most recent" because that can jump to the wrong conversation when
@@ -467,15 +540,20 @@ func restartClaudeWithResume(tmuxSession string, state *claudeSessionState) erro
 	tmuxExec("send-keys", "-t", tmuxSession, "C-c", "")
 	tmuxExec("send-keys", "-t", tmuxSession, "C-d", "")
 
-	// Build command with env vars prepended
+	// Build command with env vars prepended (shell-quote values containing special chars)
 	envPrefix := ""
 	for _, env := range state.featureEnvVars() {
-		envPrefix += env + " "
+		envPrefix += shellQuoteEnvVar(env) + " "
 	}
-	for _, env := range routerEnvVars(state.Router, lookupRouterConfig(state.Router)) {
-		envPrefix += env + " "
+	for _, env := range routerEnvVars(state.Router, lookupRouterConfig(state.Router), tmuxSession) {
+		envPrefix += shellQuoteEnvVar(env) + " "
 	}
-	cmd := envPrefix + launchClaude(tmuxSession, state, true)
+	// Only resume if we have a session ID AND its JSONL exists on disk.
+	// The session ID may have been captured from ~/.claude/sessions/ before
+	// any messages were exchanged, so the JSONL may not exist yet.
+	canResume := state.SessionID != "" && claudeSessionExists(state.WorkDir, state.SessionID)
+	cmd := envPrefix + launchClaude(tmuxSession, state, canResume)
+
 	// Target pane 0 explicitly (the claude pane)
 	return tmuxExec("respawn-pane", "-k", "-t", tmuxSession+":0.0", cmd)
 }

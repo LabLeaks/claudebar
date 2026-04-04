@@ -40,7 +40,7 @@ func TestStatusLineDataParsing(t *testing.T) {
 	if sl.RateLimits.FiveHour.UsedPercentage != 23.5 {
 		t.Errorf("five_hour pct = %f, want 23.5", sl.RateLimits.FiveHour.UsedPercentage)
 	}
-	if sl.ContextWindow == nil || sl.ContextWindow.UsedPercentage != 15 {
+	if sl.ContextWindow == nil || sl.ContextWindow.UsedPercentage == nil || *sl.ContextWindow.UsedPercentage != 15 {
 		t.Error("context_window.used_percentage should be 15")
 	}
 }

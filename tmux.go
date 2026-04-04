@@ -179,7 +179,7 @@ set -g status-interval 5
 set -g status-style "bg=#1a1a2e,fg=#e0e0e0"
 
 # Line 1: session info + peak indicator
-set -g status-format[0] "#[bg=#16213e,fg=#00d4ff,bold] claudebar #[bg=#1a1a2e,fg=#888888] #{session_name} #[default]#[align=right]#(SELF _status)"
+set -g status-format[0] "#[bg=#16213e,fg=#00d4ff,bold] claudebar #[bg=#1a1a2e,fg=#888888] #{session_name} #[default]#[align=right]#(SELF _status #{session_name})"
 
 # Line 2: shortcut hints
 set -g status-format[1] " #[fg=#00d4ff]⌥W #[fg=#888888]background  #[fg=#ffd700]⌥S #[fg=#888888]shell  #[fg=#ff6b9d]⌥T #[fg=#888888]tasks  #[fg=#00ff88]⌥A #[fg=#888888]agents  #[fg=#b388ff]⌥H #[fg=#888888]help  #[fg=#888888]⌥M #[fg=#555555]menu"
