@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
@@ -136,6 +138,36 @@ func sessionExists(name string) bool {
 	fullArgs := []string{"-L", tmuxSocket, "has-session", "-t", name}
 	err := exec.Command("tmux", fullArgs...).Run()
 	return err == nil
+}
+
+// timeAgo formats a duration since t as a short human-readable string.
+// If short is true, returns compact form ("now", "5m", "2h").
+// If short is false, returns verbose form ("just now", "5m ago", "2h ago", "3d ago").
+func timeAgo(t time.Time, short bool) string {
+	if t.IsZero() {
+		return "?"
+	}
+	d := time.Since(t)
+	if short {
+		switch {
+		case d < time.Minute:
+			return "now"
+		case d < time.Hour:
+			return fmt.Sprintf("%dm", int(d.Minutes()))
+		default:
+			return fmt.Sprintf("%dh", int(d.Hours()))
+		}
+	}
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+	}
 }
 
 func menuCmd(self string) string {

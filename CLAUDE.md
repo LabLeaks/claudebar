@@ -36,7 +36,7 @@ Codified conventions in `_project/patterns/`. Read before writing code:
 - Restarts use `respawn-pane -k` (atomic, side panes survive).
 - Usage data comes from Claude's statusline API via `--settings` overlay → cached to disk → read by status bar.
 - Tasks/agents read directly from `~/.claude/tasks/` and `~/.claude/teams/`.
-- Router support via [claude-code-router](https://www.npmjs.com/package/@musistudio/claude-code-router) (CCR). Named router configs in claudebar's `config.json` define provider, API key, model slots, and transformers. Claudebar generates CCR's config + preset files, manages a single shared CCR instance (start/stop/liveness), and injects env vars to point each session at its preset URL (`http://127.0.0.1:3456/preset/<name>/v1/messages`). See `router.go`.
+- Router support via native Go proxy (`openrouter/` package). Named router configs in `config.json` define provider, API key, and model slots. The proxy runs as a subprocess (`claudebar _proxy_server`) on port 3457, with named presets registered at startup. Each session points at `http://127.0.0.1:3457/preset/<name>/v1/messages?session=<tmux-session>`. Per-session usage logged to `~/.claudebar/openrouter-usage/<session>.jsonl`. PID tracked at `~/.config/claudebar/openrouter-proxy.pid`. See `router.go`, `proxyserver.go`, `openrouter/`.
 
 ## Known Traps
 
@@ -45,6 +45,4 @@ Codified conventions in `_project/patterns/`. Read before writing code:
 - **Path encoding must keep the leading dash.** `/Users/gk/foo` → `-Users-gk-foo`, NOT `Users-gk-foo`. Session resume silently fails otherwise.
 - **Stale tmux servers.** If you get mysterious crashes after rebuilding, run `tmux -L claudebar kill-server` first.
 - **Don't double-escape `%` in status bar.** It works as-is in tmux 3.5a.
-- **CCR is a singleton.** Hardcoded PID file (`~/.claude-code-router/.claude-code-router.pid`) and config path (`~/.claude-code-router/config.json`). No per-instance namespacing. All router configs become presets on one shared server. Never mutate CCR config while the server is running.
-- **`ccr start` blocks.** It does not fork or daemonize. Claudebar must spawn it as a detached background process (`cmd.Start()` without `cmd.Wait()`, with `Setsid: true`).
-- **CCR docs are unreliable.** Docs claim `--config` and `--daemon` flags exist; they don't. Always verify against CCR source.
+- **Proxy is a shared singleton.** One `claudebar _proxy_server` process serves all sessions. All router configs become presets on the same instance. Don't kill the proxy while routed sessions are active.

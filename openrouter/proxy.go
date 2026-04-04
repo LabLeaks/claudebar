@@ -26,6 +26,15 @@ const (
 	maxRequestBytes = 10 * 1024 * 1024
 	// safeSessionPattern allows only alphanumeric, hyphens, and underscores.
 	safeSessionPattern = `^[a-zA-Z0-9_-]+$`
+
+	// HTTP server timeouts
+	serverReadTimeout  = 30 * time.Second
+	serverWriteTimeout = 5 * time.Minute
+	serverIdleTimeout  = 120 * time.Second
+
+	// HTTP client timeouts
+	clientTimeout          = 120 * time.Second
+	clientStreamingTimeout = 5 * time.Minute
 )
 
 var safeSessionRe = regexp.MustCompile(safeSessionPattern)
@@ -106,9 +115,9 @@ func (p *Proxy) Start(port int) error {
 	p.server = &http.Server{
 		Addr:         fmt.Sprintf("127.0.0.1:%d", port),
 		Handler:      mux,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 5 * time.Minute,
-		IdleTimeout:  120 * time.Second,
+		ReadTimeout:  serverReadTimeout,
+		WriteTimeout: serverWriteTimeout,
+		IdleTimeout:  serverIdleTimeout,
 	}
 
 	// Don't print to stdout ��� this runs as a goroutine inside tmux run-shell
@@ -348,7 +357,7 @@ func (p *Proxy) forwardToOpenRouter(openaiReq OpenAIRequest, cfg ProxyConfig, an
 		req.Header.Set("anthropic-beta", anthropicBetaHeader)
 	}
 
-	client := &http.Client{Timeout: 120 * time.Second}
+	client := &http.Client{Timeout: clientTimeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("sending request: %w", err)
@@ -388,7 +397,7 @@ func (p *Proxy) forwardToOpenRouterStream(openaiReq OpenAIRequest, cfg ProxyConf
 		req.Header.Set("anthropic-beta", anthropicBetaHeader)
 	}
 
-	client := &http.Client{Timeout: 5 * time.Minute}
+	client := &http.Client{Timeout: clientStreamingTimeout}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("sending stream request: %w", err)

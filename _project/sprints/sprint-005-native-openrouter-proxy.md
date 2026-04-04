@@ -90,31 +90,18 @@ We decompiled CCR's minified source and extracted all transformer logic:
 ### Removed
 - `cmd_claudebar2.go` — Standalone test binary (superseded by integrated proxy)
 
-## What's Not Working Yet
+## Resolved (previously "What's Not Working Yet")
 
-### Usage metrics not displaying
-- JSONL logging code exists but proxy isn't active (sessions still routing through CCR)
-- Status bar code reads JSONL but no data is being written
-- Peak/offpeak display still shows for router sessions (should be hidden — irrelevant for OpenRouter)
+All critical items resolved during sprint execution:
 
-### Hard cutover to native proxy not done
-- CCR code paths still exist in router.go (generateCCRConfig, ensureCCRRunning, etc.)
-- Old router configs lack `provider: "openrouter"` field — fall through to CCR
-- Need to: wipe old configs, require `provider` field, remove CCR fallback, fail explicitly on missing fields
+- **Usage metrics** — Fixed. JSONL logging active, status bar reads and displays tokens/cost.
+- **Hard cutover** — Done (commit 81e81c4). CCR code paths removed, `provider` field required, old configs rejected.
+- **CCR transformer logic** — Ported: enhancetool (JSON repair), tool call ID fix, maxtoken. See `openrouter/transform.go`.
 
-### CCR transformer logic not ported
-Must port from CCR:
-- [ ] **enhancetool** — JSON repair for malformed tool call arguments (3-tier: JSON → JSON5 → jsonrepair → "{}")
-- [ ] **openrouter tool call ID fix** — replace integer IDs with `call_${uuid}` strings
-- [ ] **openrouter image URL fix** — convert base64 to proper data URIs for Claude models
-- [ ] **reasoning** — convert `reasoning_content` ↔ Anthropic `thinking` blocks
-- [ ] **maxtoken** — cap max_tokens to model limits
-
-### Per-model system prompt injection not built
-- Deferred tool protocol needs explicit instructions for non-Anthropic models
-- Need to rewrite `<system-reminder>` about deferred tools to include ToolSearch protocol
-- Possibly pre-load all deferred tool schemas into the tools array
-- Research in progress (reading Claude Code source)
+### Deferred to backlog
+- **openrouter image URL fix** — convert base64 to proper data URIs for Claude models
+- **reasoning** — convert `reasoning_content` ↔ Anthropic `thinking` blocks
+- **Per-model system prompt injection** — deferred tool protocol for non-Anthropic models
 
 ## Config Format (New)
 

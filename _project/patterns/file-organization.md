@@ -12,7 +12,14 @@
 | `agentview.go` | Agent teams side pane TUI (Bubbletea, runs inside tmux) |
 | `status.go` | Status bar rendering (peak hours, usage display) |
 | `statusline.go` | Statusline handler (receives data from Claude, caches to disk) |
+| `router.go` | Router lifecycle, proxy management, preset registration, config validation |
+| `routerwizard.go` | Router config creation TUI (interactive form for new router configs) |
+| `proxyserver.go` | Entry point for `claudebar _proxy_server` subprocess |
 | `tmux.go` | tmux helpers, config generation, shared utilities |
+| `openrouter/config.go` | Config loading, API key resolution for the proxy |
+| `openrouter/proxy.go` | HTTP proxy server, request/response handling, streaming SSE, usage logging |
+| `openrouter/transform.go` | Format conversion between Anthropic and OpenRouter API schemas |
+| `openrouter/types.go` | Data structures for proxy configs, usage tracking, model slots |
 
 ## Storage
 
@@ -33,7 +40,7 @@ When changing storage locations or file formats, use the one-time migration patt
 
 ## Principles
 
-**One package, flat structure.** claudebar is a single binary with no internal packages. All files are `package main`. This is intentional — the codebase is small enough that packages would add ceremony without benefit.
+**One package, mostly flat.** claudebar is a single binary. All files are `package main` except `openrouter/`, which is a separate package because the proxy needs its own namespace for types and constants shared between the proxy server subprocess and the main binary.
 
 **Shared helpers go in tmux.go.** `currentSession()`, `editorCmd()`, `selfPath()`, `tmuxExec()`, `tmuxOutput()`. If it's used by multiple files and isn't specific to one domain, it lives here. Exceptions: `shellQuote()` lives in claude.go (co-located with the command building it serves), `truncate()` lives in taskview.go (originated there, also used by agentview). Don't move them just for consistency — proximity to primary usage matters more.
 

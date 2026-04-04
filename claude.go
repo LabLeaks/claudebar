@@ -445,7 +445,7 @@ func findUnclaimedSessions(workDir string) []sessionInfo {
 	for _, c := range candidates {
 		result = append(result, sessionInfo{
 			Name: c.id,
-			Ago:  timeAgo(time.Unix(c.mtime, 0)),
+			Ago:  timeAgo(time.Unix(c.mtime, 0), false),
 		})
 	}
 	return result

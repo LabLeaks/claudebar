@@ -35,7 +35,7 @@ func listSessions() (matching []sessionInfo, others []sessionInfo) {
 		var ago string
 		if len(parts) > 1 {
 			if ts, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
-				ago = timeAgo(time.Unix(ts, 0))
+				ago = timeAgo(time.Unix(ts, 0), false)
 			}
 		}
 		info := sessionInfo{Name: name, Ago: ago}
@@ -49,20 +49,6 @@ func listSessions() (matching []sessionInfo, others []sessionInfo) {
 		}
 	}
 	return matching, others
-}
-
-func timeAgo(t time.Time) string {
-	d := time.Since(t)
-	switch {
-	case d < time.Minute:
-		return "just now"
-	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh ago", int(d.Hours()))
-	default:
-		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
-	}
 }
 
 // claudeFlags returns any extra args meant for claude (filters out claudebar's own flags)

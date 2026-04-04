@@ -16,6 +16,12 @@ import (
 	"github.com/lableaks/claudebar/openrouter"
 )
 
+const (
+	proxyDialTimeout     = 500 * time.Millisecond
+	proxyRetryDelay      = 200 * time.Millisecond
+	legacyKillGracePeriod = 500 * time.Millisecond
+)
+
 // routerConfig defines a named router configuration in claudebar's config.json.
 type routerConfig struct {
 	Provider  string            `json:"provider"`
@@ -295,7 +301,7 @@ func killLegacyCCR() {
 	// Kill it if it's still alive
 	if err := proc.Signal(syscall.Signal(0)); err == nil {
 		proc.Signal(syscall.SIGTERM)
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(legacyKillGracePeriod)
 		proc.Kill()
 	}
 	os.Remove(pidFile)
@@ -338,10 +344,9 @@ func ensureProxyRunning(cfg *globalConfig, routerName string) error {
 
 	// If proxy is already running, just check the port is live
 	if _, alive := proxyRunning(); alive {
-		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", openrouter.DefaultPort), 500*time.Millisecond)
+		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", openrouter.DefaultPort), proxyDialTimeout)
 		if err == nil {
 			conn.Close()
-			// TODO: hot-reload presets via an API endpoint
 			return nil
 		}
 		// PID alive but port dead — stale process, kill it
@@ -394,12 +399,12 @@ func ensureProxyRunning(cfg *globalConfig, routerName string) error {
 	// Poll for port liveness (up to 5 seconds)
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", openrouter.DefaultPort), 500*time.Millisecond)
+		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", openrouter.DefaultPort), proxyDialTimeout)
 		if err == nil {
 			conn.Close()
 			return nil
 		}
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(proxyRetryDelay)
 	}
 
 	return fmt.Errorf("proxy started (pid %d) but port %d not ready after 5s", pid, openrouter.DefaultPort)

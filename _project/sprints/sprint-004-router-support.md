@@ -1,5 +1,7 @@
 # Sprint 004 — Router Support (OpenRouter + Non-Anthropic Models)
 
+> **Superseded by Sprint 005.** The CCR-based approach described here was replaced by a native Go proxy. This doc is preserved for historical context.
+
 ## Goal
 
 Let users route Claude Code through non-Anthropic providers (OpenRouter, DeepSeek, etc.) via claudebar, using claude-code-router (CCR) as the translation proxy.

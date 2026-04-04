@@ -4,7 +4,7 @@ Unclassified items. Promote to a sprint when ready to work on them.
 
 ## Code quality
 
-- [ ] Unify timeAgo and timeAgoShort into one function with a format param
+- [x] Unify timeAgo and timeAgoShort into one function with a format param (done in v0.2.0 prep)
 - [ ] viewOverview calls loadTeamConfig on every 1s tick — cache it in the model
 - [ ] wrapText doesn't preserve intentional newlines in descriptions
 
@@ -19,6 +19,13 @@ Unclassified items. Promote to a sprint when ready to work on them.
 - [ ] `claudebar gc` command to clean up stale state files from dead sessions
 - [ ] Show unclaimed sessions alongside live tmux sessions in the multi-session picker (currently separate paths)
 - [ ] Test whether `claude --resume <id>` works with extra flags (--model, etc.) — if so, allow extra args on resume path
+
+## Router / Proxy
+
+- [ ] Hot-reload presets via proxy API endpoint (currently requires proxy restart)
+- [ ] OpenRouter image URL fix — convert base64 to proper data URIs for Claude models
+- [ ] Reasoning transformer — convert `reasoning_content` ↔ Anthropic `thinking` blocks
+- [ ] Per-model system prompt injection for deferred tool protocol on non-Anthropic models
 
 ## Research
 

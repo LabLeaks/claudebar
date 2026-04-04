@@ -102,9 +102,9 @@ func TestTimeAgo(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := timeAgo(tt.t)
+			got := timeAgo(tt.t, false)
 			if got != tt.want {
-				t.Errorf("timeAgo(%v) = %q, want %q", now.Sub(tt.t), got, tt.want)
+				t.Errorf("timeAgo(%v, false) = %q, want %q", now.Sub(tt.t), got, tt.want)
 			}
 		})
 	}

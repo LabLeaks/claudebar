@@ -10,6 +10,7 @@ claudebar wraps Claude Code in a tmux session with a status bar, interactive sid
 
 - **Status bar** with peak hours, usage %, and reset countdown — always visible, no `/usage` needed
 - **Clickable menu** to toggle bypass permissions, remote control, agent teams, max thinking — restarts with `--resume` automatically
+- **Router** — use non-Anthropic models (OpenRouter, etc.) via built-in proxy. Config wizard, per-session token/cost tracking
 - **Tasks pane** (`⌥T`) — interactive task viewer and manager alongside Claude
 - **Agent teams pane** (`⌥A`) — see your team members, their inboxes, and status
 - **Session defaults** — set bypass permissions, agent teams, etc. to ALWAYS so every new session starts the way you want

@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+const usageCacheMaxAge = 10 * time.Minute
+
 // statusLineData is the JSON Claude Code sends to the statusline command via stdin.
 // See sprint-005 CC source analysis for full schema.
 type statusLineData struct {
@@ -170,8 +172,7 @@ func loadCachedUsage(sessionName string) *cachedUsage {
 	if err := json.Unmarshal(data, &cache); err != nil {
 		return nil
 	}
-	// Stale after 10 minutes
-	if time.Since(time.Unix(cache.UpdatedAt, 0)) > 10*time.Minute {
+	if time.Since(time.Unix(cache.UpdatedAt, 0)) > usageCacheMaxAge {
 		return nil
 	}
 	return &cache

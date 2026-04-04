@@ -13,6 +13,11 @@ import (
 	"unicode"
 )
 
+const (
+	sseInitialBufSize = 64 * 1024
+	sseMaxBufSize     = 1024 * 1024
+)
+
 // AnthropicToOpenAI converts an Anthropic Messages API request to OpenRouter's OpenAI format
 func AnthropicToOpenAI(anthropicReq AnthropicRequest) (OpenAIRequest, error) {
 	// Convert messages
@@ -278,9 +283,8 @@ func ForwardSSEStream(w io.Writer, resp io.Reader, reqID, model string) (*Usage,
 	var finalFinishReason string
 
 	scanner := bufio.NewScanner(resp)
-	// Increase bufio buffer for large chunks
-	buf := make([]byte, 0, 64*1024)
-	scanner.Buffer(buf, 1024*1024)
+	buf := make([]byte, 0, sseInitialBufSize)
+	scanner.Buffer(buf, sseMaxBufSize)
 
 	event := ""
 	for scanner.Scan() {

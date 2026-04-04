@@ -4,7 +4,7 @@ PREFIX := $(HOME)/.local/bin
 .PHONY: build install clean
 
 build:
-	go build -o $(BINARY) .
+	go build -ldflags="-s -w -X main.version=dev" -o $(BINARY) .
 
 install: build
 	mkdir -p $(PREFIX)

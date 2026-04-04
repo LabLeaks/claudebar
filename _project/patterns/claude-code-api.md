@@ -59,19 +59,19 @@ All fields are optional — we handle missing/null gracefully with zero values.
 | `MAX_THINKING_TOKENS=32000` | Set thinking token limit | feature toggle |
 | `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` | Disable background tasks | feature toggle |
 
-## Router env vars (set when routing through CCR)
+## Router env vars (set when routing through native proxy)
 
 | Var | Purpose | Set by |
 |-----|---------|--------|
-| `ANTHROPIC_BASE_URL` | Points Claude Code at CCR preset URL (`http://127.0.0.1:3456/preset/<name>/v1/messages`) | router.go |
-| `ANTHROPIC_AUTH_TOKEN` | Auth token for CCR proxy (hardcoded `claudebar`) | router.go |
+| `ANTHROPIC_BASE_URL` | Points Claude Code at proxy preset URL (`http://127.0.0.1:3457/preset/<name>/v1/messages?session=<tmux-session>`) | router.go |
+| `ANTHROPIC_AUTH_TOKEN` | Auth token for proxy (hardcoded `claudebar`) | router.go |
 | `ANTHROPIC_API_KEY=` | Empty string — prevents Anthropic login fallback | router.go |
 | `DISABLE_PROMPT_CACHING=1` | Non-Anthropic endpoints reject cache_control fields | router.go |
 | `DISABLE_COST_WARNINGS=1` | Costs aren't real Anthropic charges | router.go |
-| `NO_PROXY=127.0.0.1` | Prevent system proxy from intercepting local CCR traffic | router.go |
-| `ENABLE_TOOL_SEARCH=true` | Disabled by default on custom base URLs; re-enable for CCR | router.go |
+| `NO_PROXY=127.0.0.1` | Prevent system proxy from intercepting local proxy traffic | router.go |
+| `ENABLE_TOOL_SEARCH=true` | Disabled by default on custom base URLs; re-enable for proxy | router.go |
 
-CCR dependency: `@musistudio/claude-code-router` (`ccr` binary). Claudebar generates CCR config at `~/.claude-code-router/config.json` and presets at `~/.claude-code-router/presets/<name>.json`. PID tracked at `~/.config/claudebar/ccr.pid`.
+Native proxy: runs as `claudebar _proxy_server` subprocess on port 3457. PID tracked at `~/.config/claudebar/openrouter-proxy.pid`. Per-session usage logged to `~/.claudebar/openrouter-usage/<session>.jsonl`.
 
 ## Slash commands we send
 

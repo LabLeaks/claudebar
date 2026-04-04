@@ -660,7 +660,7 @@ func (m agentModel) viewInbox() string {
 		b.WriteString(agentDimStyle.Render("  (no messages)") + "\n")
 	} else {
 		for _, msg := range m.inbox {
-			ago := timeAgoShort(msg.time())
+			ago := timeAgo(msg.time(), true)
 			readMark := " "
 			if !msg.Read {
 				readMark = "•"
@@ -688,21 +688,6 @@ func (m agentModel) viewInbox() string {
 
 	b.WriteString(agentHintStyle.Render("  esc back  e edit inbox  d close") + "\n")
 	return b.String()
-}
-
-func timeAgoShort(t time.Time) string {
-	if t.IsZero() {
-		return "?"
-	}
-	d := time.Since(t)
-	switch {
-	case d < time.Minute:
-		return "now"
-	case d < time.Hour:
-		return fmt.Sprintf("%dm", int(d.Minutes()))
-	default:
-		return fmt.Sprintf("%dh", int(d.Hours()))
-	}
 }
 
 // openTeammatePane opens a teammate's claude session in a new tmux split pane
